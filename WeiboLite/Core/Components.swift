@@ -4,6 +4,7 @@ import SwiftUI
 struct AvatarView: View {
     let url: URL?
     let size: CGFloat
+    var fallbackText: String? = nil
 
     var body: some View {
         AsyncImage(url: url) { phase in
@@ -11,12 +12,26 @@ struct AvatarView: View {
             case .success(let image):
                 image.resizable().scaledToFill()
             default:
-                Color(uiColor: .tertiarySystemFill)
+                fallback
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
         .overlay(Circle().strokeBorder(Color.primary.opacity(0.06), lineWidth: 1))
+    }
+
+    @ViewBuilder
+    private var fallback: some View {
+        if let fallbackText = fallbackText, !fallbackText.isEmpty {
+            ZStack {
+                Color.accentColor.opacity(0.16)
+                Text(fallbackText)
+                    .font(.system(size: size * 0.42, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+        } else {
+            Color(uiColor: .tertiarySystemFill)
+        }
     }
 }
 

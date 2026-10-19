@@ -1,25 +1,25 @@
 import Combine
 import SwiftUI
 
+/// 热搜点击后要跳转的搜索页
+struct SearchRoute: Hashable {
+    let keyword: String
+}
+
 struct FeedView: View {
-    enum FeedTab: String, CaseIterable {
+    enum HomeTab: String, CaseIterable {
         case following = "关注"
-        case recommend = "推荐"
+        case hot = "热搜"
     }
 
     @StateObject private var followingStore = FeedStore(source: .following)
-    @StateObject private var recommendStore = FeedStore(source: .recommend)
-    @State private var tab: FeedTab = .recommend
-
-    private var currentStore: FeedStore {
-        tab == .recommend ? recommendStore : followingStore
-    }
+    @State private var tab: HomeTab = .following
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("信息流", selection: $tab) {
-                    ForEach(FeedTab.allCases, id: \.self) { item in
+                Picker("分组", selection: $tab) {
+                    ForEach(HomeTab.allCases, id: \.self) { item in
                         Text(item.rawValue).tag(item)
                     }
                 }
@@ -27,18 +27,25 @@ struct FeedView: View {
                 .padding(.horizontal, Theme.pagePadding)
                 .padding(.bottom, 8)
 
-                FeedList(store: currentStore)
+                if tab == .following {
+                    FeedList(store: followingStore)
+                } else {
+                    HotSearchView()
+                }
             }
             .background(AppBackground())
             .navigationTitle("微博轻读")
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
+            .navigationDestination(for: SearchRoute.self) { route in
+                SearchResultView(keyword: route.keyword)
+            }
         }
     }
 }
 
-/// 信息流列表（推荐 / 关注 / 搜索结果共用）。
+/// 信息流列表（关注 / 搜索结果 / 用户主页共用）。
 struct FeedList: View {
     @ObservedObject var store: FeedStore
 

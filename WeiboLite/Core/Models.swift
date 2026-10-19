@@ -40,17 +40,48 @@ struct ContainerData: Decodable {
             .flatMap { $0.allBlogs }
             .filter { !$0.isAd }
     }
+
+    /// 热搜榜条目（containerid=106003type=25&filter_type=realtimehot）
+    var hotItems: [HotSearchItem] {
+        var result: [HotSearchItem] = []
+        for card in cards {
+            for group in card.cardGroup {
+                let title = group.desc.isEmpty ? (group.mblog?.plainText ?? "") : group.desc
+                guard !title.isEmpty else { continue }
+                result.append(
+                    HotSearchItem(
+                        rank: result.count + 1,
+                        title: title,
+                        heat: group.descExtr
+                    )
+                )
+            }
+        }
+        return result
+    }
+}
+
+struct HotSearchItem: Identifiable, Hashable {
+    let rank: Int
+    let title: String
+    let heat: String
+
+    var id: String { "\(rank)-\(title)" }
 }
 
 struct Card: Decodable {
     let cardType: Int
     let mblog: MBlog?
     let cardGroup: [Card]
+    let desc: String
+    let descExtr: String
 
     private enum CodingKeys: String, CodingKey {
         case cardType = "card_type"
         case mblog
         case cardGroup = "card_group"
+        case desc
+        case descExtr = "desc_extr"
     }
 
     init(from decoder: Decoder) throws {
@@ -58,6 +89,8 @@ struct Card: Decodable {
         cardType = container.soft(FlexInt.self, .cardType)?.value ?? 0
         mblog = container.soft(MBlog.self, .mblog)
         cardGroup = container.soft([Card].self, .cardGroup) ?? []
+        desc = HTMLText.plain(container.soft(String.self, .desc) ?? "")
+        descExtr = container.soft(String.self, .descExtr) ?? ""
     }
 
     var allBlogs: [MBlog] {
@@ -89,6 +122,8 @@ final class MBlog: Decodable, Identifiable {
     /// 用于导航/请求详情的 id（m.weibo.cn 用 mid）
     var navKey: String { mid.isEmpty ? id : mid }
     var plainText: String { HTMLText.plain(rawText) }
+    /// 中文时间显示
+    var displayTime: String { ChineseDate.display(createdAt) }
 
     private enum CodingKeys: String, CodingKey {
         case statusID = "id"
@@ -239,6 +274,7 @@ struct WBComment: Decodable, Identifiable {
 
     var id: String { cid }
     var plainText: String { HTMLText.plain(text) }
+    var displayTime: String { ChineseDate.display(createdAt) }
 
     private enum CodingKeys: String, CodingKey {
         case cid = "id"
@@ -283,5 +319,69 @@ struct ConfigData: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         uid = container.soft(FlexID.self, .uid)?.value ?? ""
         user = container.soft(WBUser.self, .user)
+    }
+}
+
+// MARK: - 关注流 /feed/friends
+
+struct FriendsTimelineResponse: Decodable {
+    let ok: Int
+    let data: FriendsTimelineData?
+
+    private enum CodingKeys: String, CodingKey { case ok, data }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        data = container.soft(FriendsTimelineData.self, .data)
+    }
+}
+
+struct FriendsTimelineData: Decodable {
+    let statuses: [MBlog]
+    let nextCursor: String
+
+    private enum CodingKeys: String, CodingKey {
+        case statuses
+        case nextCursorStr
+        case nextCursor = "next_cursor"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        statuses = container.soft([MBlog].self, .statuses) ?? []
+        nextCursor = container.soft(String.self, .nextCursorStr)
+            ?? container.soft(FlexID.self, .nextCursor)?.value
+            ?? ""
+    }
+}
+
+// MARK: - 个人资料 /profile/info
+
+struct ProfileResponse: Decodable {
+    let ok: Int
+    let data: ProfileInfoData?
+
+    private enum CodingKeys: String, CodingKey { case ok, data }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        data = container.soft(ProfileInfoData.self, .data)
+    }
+}
+
+struct ProfileInfoData: Decodable {
+    let userInfo: WBUser?
+
+    private enum CodingKeys: String, CodingKey {
+        case userInfo
+        case userInfoSnake = "user_info"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userInfo = container.soft(WBUser.self, .userInfo)
+            ?? container.soft(WBUser.self, .userInfoSnake)
     }
 }

@@ -20,7 +20,7 @@ struct StatusDetailView: View {
                                     .textSelection(.enabled)
                             }
                             if !status.pics.isEmpty {
-                                ImageGrid(pics: status.pics)
+                                TappableImageGrid(pics: status.pics)
                             }
                             if let retweeted = status.retweeted {
                                 RepostView(status: retweeted)
@@ -62,7 +62,7 @@ struct StatusDetailView: View {
                             .foregroundStyle(.orange)
                     }
                 }
-                Text(status.createdAt)
+                Text(status.displayTime)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -121,7 +121,7 @@ struct CommentRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
 
-                Text(comment.createdAt)
+                Text(comment.displayTime)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }

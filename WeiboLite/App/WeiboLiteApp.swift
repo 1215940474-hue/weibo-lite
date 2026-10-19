@@ -6,7 +6,7 @@ struct WeiboLiteApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(WeiboSession.shared)
-                .tint(.pink)
+                .tint(.blue)
         }
     }
 }

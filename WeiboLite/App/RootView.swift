@@ -8,6 +8,9 @@ struct RootView: View {
     var body: some View {
         MainTabView()
             .task {
+                if session.isLoggedIn {
+                    await session.refreshProfile()
+                }
                 guard !session.isLoggedIn, !didSkipLogin else { return }
                 showLogin = true
             }

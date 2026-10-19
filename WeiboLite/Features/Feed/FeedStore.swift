@@ -1,11 +1,10 @@
 import Combine
 import Foundation
 
-/// 通用信息流数据源：推荐流 / 关注流 / 用户主页 / 搜索结果 共用。
+/// 通用信息流数据源：关注流（/feed/friends）、用户主页、搜索结果。
 @MainActor
 final class FeedStore: ObservableObject {
     enum Source: Equatable {
-        case recommend
         case following
         case user(uid: String)
         case search(keyword: String)
@@ -18,25 +17,23 @@ final class FeedStore: ObservableObject {
 
     private let source: Source
     private var page = 1
-    private var sinceID: Int64 = 0
+    private var cursor = ""
     private var seen: Set<String> = []
 
     init(source: Source) {
         self.source = source
     }
 
-    var isEmpty: Bool { items.isEmpty }
-
     func reload() async {
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil
         page = 1
-        sinceID = 0
+        cursor = ""
         defer { isLoading = false }
 
         do {
-            let blogs = try await fetch(page: 1, sinceID: 0)
+            let blogs = try await fetch(isFirst: true)
             seen = Set(blogs.map { $0.navKey })
             items = blogs
             if blogs.isEmpty {
@@ -52,10 +49,8 @@ final class FeedStore: ObservableObject {
         isLoadingMore = true
         defer { isLoadingMore = false }
 
-        let nextPage = page + 1
         do {
-            let blogs = try await fetch(page: nextPage, sinceID: sinceID)
-            page = nextPage
+            let blogs = try await fetch(isFirst: false)
             var added: [MBlog] = []
             for blog in blogs where !seen.contains(blog.navKey) {
                 seen.insert(blog.navKey)
@@ -69,29 +64,48 @@ final class FeedStore: ObservableObject {
 
     // MARK: - 网络
 
-    private func fetch(page: Int, sinceID: Int64) async throws -> [MBlog] {
+    private func fetch(isFirst: Bool) async throws -> [MBlog] {
         switch source {
-        case .recommend:
-            return try await loadContainer(id: WeiboEndpoint.recommendContainer, sinceID: sinceID, page: 1)
         case .following:
-            return try await loadContainer(id: WeiboEndpoint.followingContainer, sinceID: sinceID, page: 1)
+            return try await fetchFollowing(maxID: isFirst ? nil : cursor)
         case .user(let uid):
-            return try await loadContainer(id: "107603\(uid)", sinceID: 0, page: page)
+            if !isFirst { page += 1 }
+            return try await fetchContainer(
+                id: WeiboEndpoint.userTimelineContainer(uid: uid),
+                page: page
+            )
         case .search(let keyword):
-            return try await loadContainer(id: "100103type=1&q=\(keyword)", sinceID: 0, page: page)
+            if !isFirst { page += 1 }
+            return try await fetchContainer(
+                id: WeiboEndpoint.searchContainer(keyword: keyword),
+                page: page
+            )
         }
     }
 
-    private func loadContainer(id: String, sinceID: Int64, page: Int) async throws -> [MBlog] {
-        guard let url = WeiboEndpoint.container(id: id, sinceID: sinceID, page: page) else {
+    /// 真正的关注时间线：/feed/friends，按 max_id 游标翻页
+    private func fetchFollowing(maxID: String?) async throws -> [MBlog] {
+        guard WeiboSession.shared.isLoggedIn else {
+            throw WeiboAPIError.notLoggedIn
+        }
+        guard let url = WeiboEndpoint.friendsTimeline(maxID: maxID) else {
+            throw WeiboAPIError.badURL
+        }
+        let response: FriendsTimelineResponse = try await WeiboAPI.shared.get(url)
+        guard response.ok == 1, let data = response.data else {
+            throw WeiboAPIError.empty
+        }
+        cursor = data.nextCursor
+        return data.statuses.filter { !$0.isAd }
+    }
+
+    private func fetchContainer(id: String, page: Int) async throws -> [MBlog] {
+        guard let url = WeiboEndpoint.container(id: id, page: page) else {
             throw WeiboAPIError.badURL
         }
         let response: ContainerResponse = try await WeiboAPI.shared.get(url)
         guard response.ok == 1, let data = response.data else {
             throw WeiboAPIError.empty
-        }
-        if data.sinceID > 0 {
-            self.sinceID = data.sinceID
         }
         return data.statusCards
     }
@@ -101,9 +115,7 @@ final class FeedStore: ObservableObject {
     private var emptyHint: String {
         switch source {
         case .following:
-            return "关注流暂时取不到（接口可能已调整）。下拉重试，或切到「推荐」。"
-        case .recommend:
-            return "没有内容。若未登录，请到「我」里先登录。"
+            return "关注流没有内容。先确认已登录，或下拉刷新重试。"
         case .user:
             return "这个用户没有可见微博。"
         case .search:

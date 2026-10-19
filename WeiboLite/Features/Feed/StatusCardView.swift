@@ -18,7 +18,7 @@ struct StatusCardView: View {
                 }
 
                 if !status.pics.isEmpty {
-                    ImageGrid(pics: status.pics)
+                    TappableImageGrid(pics: status.pics)
                 }
 
                 if let retweeted = status.retweeted {
@@ -46,7 +46,7 @@ struct StatusCardView: View {
                     }
                 }
                 HStack(spacing: 6) {
-                    Text(status.createdAt)
+                    Text(status.displayTime)
                     if !status.source.isEmpty {
                         Text("来自 \(status.source)")
                     }
@@ -90,27 +90,28 @@ struct RepostView: View {
             }
 
             if !status.pics.isEmpty {
-                ImageGrid(pics: status.pics)
+                TappableImageGrid(pics: status.pics)
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemBackground).opacity(0.55))
+                .fill(Color(uiColor: .secondarySystemBackground).opacity(0.65))
         )
     }
 }
 
-/// 九宫格配图。
+/// 九宫格配图（可点击查看大图）。
 struct ImageGrid: View {
     let pics: [WBPic]
+    var onTap: ((Int) -> Void)? = nil
 
     var body: some View {
         let urls = pics.compactMap { $0.url }
         if !urls.isEmpty {
             if urls.count == 1 {
-                ImageCell(url: urls[0])
+                cell(urls[0], index: 0)
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
             } else {
                 let columns = urls.count == 4 ? 2 : 3
@@ -119,12 +120,18 @@ struct ImageGrid: View {
                     spacing: 4
                 ) {
                     ForEach(Array(urls.enumerated()), id: \.offset) { item in
-                        ImageCell(url: item.element)
+                        cell(item.element, index: item.offset)
                             .aspectRatio(1, contentMode: .fit)
                     }
                 }
             }
         }
+    }
+
+    private func cell(_ url: URL, index: Int) -> some View {
+        ImageCell(url: url)
+            .contentShape(Rectangle())
+            .onTapGesture { onTap?(index) }
     }
 }
 

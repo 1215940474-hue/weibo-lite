@@ -24,6 +24,17 @@ final class WeiboSession: ObservableObject {
             .joined(separator: "; ")
     }
 
+    /// 微博网页接口的 XSRF 校验头，取 Cookie 里的 XSRF-TOKEN
+    var xsrfToken: String {
+        cookieValues["XSRF-TOKEN"] ?? cookieValues["X-XSRF-TOKEN"] ?? ""
+    }
+
+    /// 没有头像时显示的占位文字
+    var avatarInitial: String {
+        let name = screenName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "微" : String(name.prefix(1))
+    }
+
     private init() {
         loadCookies()
         loadProfile()
@@ -48,22 +59,56 @@ final class WeiboSession: ObservableObject {
         }
     }
 
+    /// 拉取自己的昵称和头像：优先 /profile/info，失败再退回 /api/config
     func refreshProfile() async {
         guard isLoggedIn else { return }
-        guard let url = WeiboEndpoint.config() else { return }
-        do {
-            let response: ConfigResponse = try await WeiboAPI.shared.get(url)
-            guard let data = response.data else { return }
-            uid = data.uid
-            if let user = data.user {
-                screenName = user.screenName
-                avatarURL = user.avatarURL
+
+        // 1) 没有 uid 时先取 uid
+        if uid.isEmpty {
+            if let url = WeiboEndpoint.config() {
+                if let response: ConfigResponse = try? await WeiboAPI.shared.get(url),
+                   let data = response.data {
+                    uid = data.uid
+                    apply(user: data.user)
+                }
             }
-            persistProfile()
-            // 接口能返回 uid 说明 Cookie 仍然有效
-            if uid.isEmpty { isLoggedIn = false }
-        } catch {
-            // 网络抖动时保留本地登录态，不把用户踢下线
+        }
+
+        // 2) 用 uid 拉完整资料（这里才有头像）
+        if !uid.isEmpty, let url = WeiboEndpoint.profileInfo(uid: uid) {
+            let headers = ["X-Xsrf-Token": xsrfToken]
+            if let response: ProfileResponse = try? await WeiboAPI.shared.get(url, extraHeaders: headers),
+               let user = response.data?.userInfo {
+                apply(user: user)
+            }
+        }
+
+        // 3) 兜底再试一次 config
+        if avatarURL == nil || screenName.isEmpty, let url = WeiboEndpoint.config() {
+            if let response: ConfigResponse = try? await WeiboAPI.shared.get(url),
+               let data = response.data {
+                if uid.isEmpty { uid = data.uid }
+                apply(user: data.user)
+            }
+        }
+
+        persistProfile()
+        if uid.isEmpty {
+            // 所有接口都拿不到 uid，说明 Cookie 失效了
+            isLoggedIn = false
+        }
+    }
+
+    private func apply(user: WBUser?) {
+        guard let user = user else { return }
+        if !user.screenName.isEmpty, user.screenName != "微博用户" {
+            screenName = user.screenName
+        }
+        if let avatar = user.avatarURL {
+            avatarURL = avatar
+        }
+        if !user.uid.isEmpty {
+            uid = user.uid
         }
     }
 

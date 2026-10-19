@@ -19,6 +19,8 @@ struct MeView: View {
             .scrollIndicators(.hidden)
             .background(AppBackground())
             .navigationTitle("我")
+            .task { await session.refreshProfile() }
+            .refreshable { await session.refreshProfile() }
             .sheet(isPresented: $showLogin) {
                 LoginView()
             }
@@ -28,7 +30,7 @@ struct MeView: View {
     private var profileCard: some View {
         GlassCard {
             HStack(spacing: 14) {
-                AvatarView(url: session.avatarURL, size: 56)
+                AvatarView(url: session.avatarURL, size: 56, fallbackText: session.avatarInitial)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(session.isLoggedIn ? (session.screenName.isEmpty ? "已登录" : session.screenName) : "未登录")
@@ -39,6 +41,12 @@ struct MeView: View {
                 }
 
                 Spacer(minLength: 0)
+
+                if session.isLoggedIn {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.footnote)
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
     }

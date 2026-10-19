@@ -70,3 +70,21 @@ struct SearchView: View {
         Task { await store.reload() }
     }
 }
+
+/// 搜索结果页（热搜点击 / 搜索跳转用）
+struct SearchResultView: View {
+    let keyword: String
+
+    @StateObject private var store: FeedStore
+
+    init(keyword: String) {
+        self.keyword = keyword
+        _store = StateObject(wrappedValue: FeedStore(source: .search(keyword: keyword)))
+    }
+
+    var body: some View {
+        FeedList(store: store)
+            .navigationTitle(keyword)
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}

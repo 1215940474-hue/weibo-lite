@@ -5,6 +5,7 @@ enum WeiboAPIError: LocalizedError {
     case http(Int)
     case decode
     case empty
+    case notLoggedIn
 
     var errorDescription: String? {
         switch self {
@@ -16,6 +17,8 @@ enum WeiboAPIError: LocalizedError {
             return "数据解析失败，接口可能已改版"
         case .empty:
             return "接口没有返回内容，可能登录已过期或触发了风控"
+        case .notLoggedIn:
+            return "还没登录，请先到「我」里登录微博"
         }
     }
 }
@@ -27,9 +30,9 @@ final class WeiboAPI {
 
     private let limiter = RateLimiter(minInterval: 1.0)
 
-    private static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+    static let userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
-    func get<T: Decodable>(_ url: URL) async throws -> T {
+    func get<T: Decodable>(_ url: URL, extraHeaders: [String: String] = [:]) async throws -> T {
         await limiter.wait()
 
         var request = URLRequest(url: url, timeoutInterval: 20)
@@ -42,6 +45,9 @@ final class WeiboAPI {
         let cookie = WeiboSession.shared.cookieHeader
         if !cookie.isEmpty {
             request.setValue(cookie, forHTTPHeaderField: "Cookie")
+        }
+        for (key, value) in extraHeaders where !value.isEmpty {
+            request.setValue(value, forHTTPHeaderField: key)
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -79,22 +85,30 @@ actor RateLimiter {
     }
 }
 
-/// m.weibo.cn 网页接口端点。
+/// m.weibo.cn 网页接口端点（参数/路径以 Flare 的 vvo 模块为准）。
 enum WeiboEndpoint {
-    /// 首页「推荐」
-    static let recommendContainer = "102803"
-    /// 首页「关注」（接口偶尔调整，失败时上层会提示切到推荐）
-    static let followingContainer = "102803_ctg1_1199_-_ctg1_1199_home"
+    /// 个人主页微博列表
+    static func userTimelineContainer(uid: String) -> String { "107603\(uid)" }
+    /// 搜索微博
+    static func searchContainer(keyword: String) -> String { "100103type=1&q=\(keyword)" }
+    /// 热搜榜
+    static let hotSearchContainer = "106003type=25&filter_type=realtimehot"
 
     static func config() -> URL? {
         build(path: "/api/config", items: [])
     }
 
-    static func container(id: String, sinceID: Int64 = 0, page: Int = 1) -> URL? {
-        var items: [URLQueryItem] = [URLQueryItem(name: "containerid", value: id)]
-        if sinceID > 0 {
-            items.append(URLQueryItem(name: "since_id", value: String(sinceID)))
+    /// 关注流：这是真正的时间线接口，max_id 传上一页的 nextCursor
+    static func friendsTimeline(maxID: String?) -> URL? {
+        var items: [URLQueryItem] = []
+        if let maxID = maxID, !maxID.isEmpty {
+            items.append(URLQueryItem(name: "max_id", value: maxID))
         }
+        return build(path: "/feed/friends", items: items)
+    }
+
+    static func container(id: String, page: Int = 1) -> URL? {
+        var items: [URLQueryItem] = [URLQueryItem(name: "containerid", value: id)]
         if page > 1 {
             items.append(URLQueryItem(name: "page", value: String(page)))
         }
@@ -102,12 +116,8 @@ enum WeiboEndpoint {
         return build(path: "/api/container/getIndex", items: items)
     }
 
-    static func userTimeline(uid: String, page: Int = 1) -> URL? {
-        container(id: "107603\(uid)", page: page)
-    }
-
-    static func search(keyword: String, page: Int = 1) -> URL? {
-        container(id: "100103type=1&q=\(keyword)", page: page)
+    static func profileInfo(uid: String) -> URL? {
+        build(path: "/profile/info", items: [URLQueryItem(name: "uid", value: uid)])
     }
 
     static func status(mid: String) -> URL? {
