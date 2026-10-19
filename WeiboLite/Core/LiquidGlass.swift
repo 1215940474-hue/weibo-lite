@@ -23,7 +23,6 @@ extension View {
         self
             .background(Color(uiColor: .systemBackground), in: shape)
             .overlay(shape.strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.8))
-            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
     }
 
     @ViewBuilder

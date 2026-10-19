@@ -81,21 +81,21 @@ struct ErrorStateView: View {
     }
 }
 
-/// 顶部渐进模糊：滚动内容进入导航栏下方时逐渐虚化。
+/// 顶部渐隐：用纯渐变（不用毛玻璃，滚动更省性能，也不会有突兀的横线）。
 struct TopBlurFade: View {
-    var height: CGFloat = 24
+    var height: CGFloat = 20
 
     var body: some View {
-        Rectangle()
-            .fill(.ultraThinMaterial)
-            .frame(height: height)
-            .mask(
-                LinearGradient(
-                    colors: [Color.black, Color.black.opacity(0.55), Color.clear],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .allowsHitTesting(false)
+        LinearGradient(
+            colors: [
+                Color(uiColor: .systemBackground),
+                Color(uiColor: .systemBackground).opacity(0.75),
+                Color(uiColor: .systemBackground).opacity(0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(height: height)
+        .allowsHitTesting(false)
     }
 }

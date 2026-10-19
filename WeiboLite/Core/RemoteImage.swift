@@ -30,6 +30,30 @@ final class ImageLoader {
             DispatchQueue.main.async { completion(image) }
         }.resume()
     }
+
+    /// 表情图：加载并缩放到和正文文字等高
+    func loadEmoji(_ url: URL, pointHeight: CGFloat = 19, completion: @escaping (UIImage?) -> Void) {
+        load(url) { image in
+            guard let image = image else {
+                completion(nil)
+                return
+            }
+            let scale = UIScreen.main.scale
+            let target = CGSize(width: pointHeight * scale, height: pointHeight * scale)
+            let renderer = UIGraphicsImageRenderer(size: target)
+            let resized = renderer.image { _ in
+                let ratio = min(target.width / image.size.width, target.height / image.size.height)
+                let size = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
+                image.draw(in: CGRect(
+                    x: (target.width - size.width) / 2,
+                    y: (target.height - size.height) / 2,
+                    width: size.width,
+                    height: size.height
+                ))
+            }
+            completion(resized)
+        }
+    }
 }
 
 /// 固定填充方式的远程图片（九宫格用）。

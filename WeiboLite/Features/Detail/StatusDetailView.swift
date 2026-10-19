@@ -4,6 +4,9 @@ struct StatusDetailView: View {
     let mid: String
 
     @StateObject private var store = DetailStore()
+    @State private var fullTextHTML: String?
+    @State private var isExpanded = false
+    @State private var isLoadingFullText = false
 
     var body: some View {
         ScrollView {
@@ -12,14 +15,7 @@ struct StatusDetailView: View {
                     GlassCard {
                         VStack(alignment: .leading, spacing: 12) {
                             header(status)
-                            if !status.plainText.isEmpty {
-                                LinkableText(
-                                    text: status.plainText,
-                                    font: .system(size: 17),
-                                    lineSpacing: 5
-                                )
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
+                            textSection(status)
                             if !status.videoURL.isEmpty, let videoURL = URL(string: status.videoURL) {
                                 WeiboVideoPlayer(url: videoURL)
                             }
@@ -51,6 +47,49 @@ struct StatusDetailView: View {
         .navigationTitle("微博正文")
         .navigationBarTitleDisplayMode(.inline)
         .task { await store.load(mid: mid) }
+    }
+
+    private func textSection(_ status: MBlog) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            RichTextView(
+                html: fullTextHTML ?? status.rawText,
+                font: .system(size: 17),
+                lineSpacing: 5,
+                lineLimit: isExpanded ? nil : 10
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if (status.isLongText || status.plainText.count > 300) && !isExpanded {
+                Button {
+                    loadFullText(status)
+                } label: {
+                    HStack(spacing: 3) {
+                        Text("全文")
+                        if isLoadingFullText {
+                            ProgressView().controlSize(.mini)
+                        }
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(.blue)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func loadFullText(_ status: MBlog) {
+        guard !isLoadingFullText else { return }
+        isLoadingFullText = true
+        Task {
+            defer { isLoadingFullText = false }
+            if let url = WeiboEndpoint.statusExtend(mid: status.navKey),
+               let response: StatusExtendResponse = try? await WeiboAPI.shared.get(url),
+               let html = response.data?.longTextContent,
+               !html.isEmpty {
+                fullTextHTML = html
+            }
+            isExpanded = true
+        }
     }
 
     private func header(_ status: MBlog) -> some View {
@@ -124,7 +163,7 @@ struct CommentRow: View {
                     CountLabel(icon: "hand.thumbsup", count: comment.likeCounts)
                 }
 
-                LinkableText(text: comment.plainText, font: .system(size: 15))
+                RichTextView(html: comment.rawHTML, font: .system(size: 15))
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 12) {
@@ -204,7 +243,7 @@ struct ReplyRow: View {
                 Spacer(minLength: 0)
             }
 
-            LinkableText(text: comment.plainText, font: .system(size: 14))
+            RichTextView(html: comment.rawHTML, font: .system(size: 14))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(8)

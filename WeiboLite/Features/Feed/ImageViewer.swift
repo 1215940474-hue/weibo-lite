@@ -9,12 +9,19 @@ struct ImageViewerPayload: Identifiable {
 }
 
 enum WeiboImage {
-    /// 把缩略图地址换成原图地址（/large/、/mw690/ 等 → /original/）
-    static func original(_ url: URL) -> URL {
+    private static let tokens = ["/large/", "/mw690/", "/bmiddle/", "/thumbnail/", "/thumb150/", "/square/", "/orj360/", "/original/"]
+
+    /// 原图（查看大图用）
+    static func original(_ url: URL) -> URL { replaced(url, with: "/original/") }
+    /// 大图（单图预览用）
+    static func large(_ url: URL) -> URL { replaced(url, with: "/large/") }
+    /// 九宫格用中等尺寸，省内存、滚动更顺
+    static func thumbnail(_ url: URL) -> URL { replaced(url, with: "/mw690/") }
+
+    private static func replaced(_ url: URL, with target: String) -> URL {
         var string = url.absoluteString
-        let tokens = ["/large/", "/mw690/", "/bmiddle/", "/thumbnail/", "/thumb150/", "/square/", "/orj360/"]
         for token in tokens where string.contains(token) {
-            string = string.replacingOccurrences(of: token, with: "/original/")
+            string = string.replacingOccurrences(of: token, with: target)
             return URL(string: string) ?? url
         }
         return url

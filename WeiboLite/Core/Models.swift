@@ -20,12 +20,24 @@ struct ContainerData: Decodable {
     let sinceID: Int64
     let maxID: Int64
     let userInfo: WBUser?
+    /// cardlistInfo.since_id：搜索/推荐翻页真正要传的游标
+    let cursor: Int64
 
     private enum CodingKeys: String, CodingKey {
         case cards
         case sinceID = "since_id"
         case maxID = "max_id"
         case userInfo
+        case cardlistInfo
+    }
+
+    private struct CardlistInfo: Decodable {
+        let sinceID: Int64
+        private enum CodingKeys: String, CodingKey { case sinceID = "since_id" }
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            sinceID = Int64(container.soft(FlexID.self, .sinceID)?.value ?? "") ?? 0
+        }
     }
 
     init(from decoder: Decoder) throws {
@@ -34,6 +46,7 @@ struct ContainerData: Decodable {
         sinceID = Int64(container.soft(FlexID.self, .sinceID)?.value ?? "") ?? 0
         maxID = Int64(container.soft(FlexID.self, .maxID)?.value ?? "") ?? 0
         userInfo = container.soft(WBUser.self, .userInfo)
+        cursor = container.soft(CardlistInfo.self, .cardlistInfo)?.sinceID ?? 0
     }
 
     /// 只保留真正的微博卡片（card_type == 9），其余（广告位、话题、分组头）全部丢掉。
@@ -122,13 +135,13 @@ final class MBlog: Decodable, Identifiable {
     let isAd: Bool
     /// 视频地址（page_info.type == "video" 时非空）
     let videoURL: String
+    /// 解析一次就缓存，滚动时不再重复做正则/日期计算（性能关键）
+    let plainText: String
+    let displayTime: String
 
     var id: String { statusID.isEmpty ? mid : statusID }
     /// 用于导航/请求详情的 id（m.weibo.cn 用 mid）
     var navKey: String { mid.isEmpty ? id : mid }
-    var plainText: String { HTMLText.plain(rawText) }
-    /// 中文时间显示
-    var displayTime: String { ChineseDate.display(createdAt) }
 
     private enum CodingKeys: String, CodingKey {
         case statusID = "id"
@@ -154,6 +167,8 @@ final class MBlog: Decodable, Identifiable {
         mid = container.soft(FlexID.self, .mid)?.value ?? ""
         rawText = container.soft(String.self, .rawText) ?? ""
         createdAt = container.soft(String.self, .createdAt) ?? ""
+        plainText = HTMLText.plain(rawText)
+        displayTime = ChineseDate.display(createdAt)
         source = HTMLText.plain(container.soft(String.self, .source) ?? "")
         user = container.soft(WBUser.self, .user)
         pics = container.soft([WBPic].self, .pics) ?? []
@@ -163,7 +178,9 @@ final class MBlog: Decodable, Identifiable {
         attitudesCount = container.soft(FlexInt.self, .attitudesCount)?.value ?? 0
         isLongText = container.soft(Bool.self, .isLongText) ?? false
 
-        let hasPromotion = (container.soft(AnyJSON.self, .promotion)) != nil
+        let hasPromotionKey = container.contains(.promotion)
+        let promotionIsNil = (try? container.decodeNil(forKey: .promotion)) ?? true
+        let hasPromotion = hasPromotionKey && !promotionIsNil
         let adFlag = (container.soft(FlexInt.self, .isAd)?.value ?? 0) == 1
         isAd = hasPromotion || adFlag
         videoURL = container.soft(PageInfo.self, .pageInfo)?.bestVideoURL ?? ""
@@ -281,6 +298,7 @@ struct WBComment: Decodable, Identifiable {
     let user: WBUser?
 
     var id: String { cid }
+    var rawHTML: String { text }
     var plainText: String { HTMLText.plain(text) }
     var displayTime: String { ChineseDate.display(createdAt) }
 
@@ -457,9 +475,9 @@ struct PageInfo: Decodable {
         urls = container.soft([String: FlexString].self, .urls) ?? [:]
     }
 
-    /// 视频地址优先级：720p mp4 → hd mp4 → sd → stream
+    /// 视频地址优先级：1080p → 720p → hd → sd → stream（尽量最高画质）
     var bestVideoURL: String {
-        for key in ["mp4_720p_mp4", "mp4_hd_url", "mp4_sd_url"] {
+        for key in ["mp4_1080p_mp4", "mp4_2160p_mp4", "mp4_720p_mp4", "mp4_hd_url", "mp4_sd_url"] {
             if let value = urls[key]?.value, !value.isEmpty {
                 return value
             }
@@ -488,5 +506,36 @@ struct CommentRepliesResponse: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         ok = container.soft(FlexInt.self, .ok)?.value ?? 0
         replies = container.soft([WBComment].self, .data) ?? []
+    }
+}
+
+// MARK: - 长文全文 /statuses/extend
+
+struct StatusExtendResponse: Decodable {
+    let ok: Int
+    let data: StatusExtendData?
+
+    private enum CodingKeys: String, CodingKey { case ok, data }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        data = container.soft(StatusExtendData.self, .data)
+    }
+}
+
+struct StatusExtendData: Decodable {
+    let longTextContent: String
+
+    private enum CodingKeys: String, CodingKey {
+        case longTextContent
+        case longTextContentSnake = "longTextContentRaw"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        longTextContent = container.soft(String.self, .longTextContent)
+            ?? container.soft(String.self, .longTextContentSnake)
+            ?? ""
     }
 }

@@ -147,6 +147,11 @@ enum WeiboEndpoint {
         ])
     }
 
+    /// 长文全文
+    static func statusExtend(mid: String) -> URL? {
+        build(path: "/statuses/extend", items: [URLQueryItem(name: "id", value: mid)])
+    }
+
     static func status(mid: String) -> URL? {
         build(path: "/statuses/show", items: [URLQueryItem(name: "id", value: mid)])
     }

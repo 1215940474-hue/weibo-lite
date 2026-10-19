@@ -19,6 +19,7 @@ final class FeedStore: ObservableObject {
     private let source: Source
     private var page = 1
     private var cursor = ""
+    /// 容器类接口的翻页游标（cardlistInfo.since_id）
     private var sinceID: Int64 = 0
     private var seen: Set<String> = []
 
@@ -70,33 +71,32 @@ final class FeedStore: ObservableObject {
     private func fetch(isFirst: Bool) async throws -> [MBlog] {
         switch source {
         case .recommend:
-            if !isFirst { page += 1 }
-            return try await fetchRecommend()
+            return try await fetchRecommend(isFirst: isFirst)
         case .following:
             return try await fetchFollowing(maxID: isFirst ? nil : cursor)
         case .user(let uid):
-            if !isFirst { page += 1 }
+            if !isFirst, sinceID == 0 { page += 1 }
             return try await fetchContainer(
                 id: WeiboEndpoint.userTimelineContainer(uid: uid),
-                page: page,
+                page: sinceID > 0 ? 1 : page,
                 pageType: nil
             )
         case .search(let keyword):
-            if !isFirst { page += 1 }
-            // 搜索必须带 page_type=searchall，否则只有首页 2~3 条
+            if !isFirst, sinceID == 0 { page += 1 }
             return try await fetchContainer(
                 id: WeiboEndpoint.searchContainer(keyword: keyword),
-                page: page,
+                page: sinceID > 0 ? 1 : page,
                 pageType: "searchall"
             )
         }
     }
 
-    /// 推荐流：102803 容器，翻页用 since_id
-    private func fetchRecommend() async throws -> [MBlog] {
+    /// 推荐流：102803 容器，优先用 since_id 游标翻页
+    private func fetchRecommend(isFirst: Bool) async throws -> [MBlog] {
+        if !isFirst, sinceID == 0 { page += 1 }
         guard let url = WeiboEndpoint.container(
             id: WeiboEndpoint.recommendContainer,
-            page: 1,
+            page: sinceID > 0 ? 1 : page,
             sinceID: sinceID
         ) else {
             throw WeiboAPIError.badURL
@@ -105,9 +105,7 @@ final class FeedStore: ObservableObject {
         guard response.ok == 1, let data = response.data else {
             throw WeiboAPIError.empty
         }
-        if data.sinceID > 0 {
-            sinceID = data.sinceID
-        }
+        updateCursor(from: data)
         return data.statusCards
     }
 
@@ -128,14 +126,27 @@ final class FeedStore: ObservableObject {
     }
 
     private func fetchContainer(id: String, page: Int, pageType: String?) async throws -> [MBlog] {
-        guard let url = WeiboEndpoint.container(id: id, page: page, pageType: pageType) else {
+        guard let url = WeiboEndpoint.container(
+            id: id,
+            page: page,
+            sinceID: sinceID,
+            pageType: pageType
+        ) else {
             throw WeiboAPIError.badURL
         }
         let response: ContainerResponse = try await WeiboAPI.shared.get(url)
         guard response.ok == 1, let data = response.data else {
             throw WeiboAPIError.empty
         }
+        updateCursor(from: data)
         return data.statusCards
+    }
+
+    private func updateCursor(from data: ContainerData) {
+        let next = data.cursor > 0 ? data.cursor : data.sinceID
+        if next > 0 {
+            sinceID = next
+        }
     }
 
     // MARK: - 提示文案

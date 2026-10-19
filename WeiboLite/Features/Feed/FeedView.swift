@@ -66,15 +66,12 @@ struct FeedList: View {
                 }
 
                 ForEach(store.items) { status in
-                    NavigationLink(value: status.navKey) {
-                        StatusCardView(status: status)
-                    }
-                    .buttonStyle(.plain)
-                    .onAppear {
-                        if status.navKey == store.items.last?.navKey {
-                            Task { await store.loadMore() }
+                    StatusCardView(status: status)
+                        .onAppear {
+                            if status.navKey == store.items.last?.navKey {
+                                Task { await store.loadMore() }
+                            }
                         }
-                    }
                 }
 
                 if store.isLoadingMore {
