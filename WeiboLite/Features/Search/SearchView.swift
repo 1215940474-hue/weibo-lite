@@ -30,6 +30,7 @@ struct SearchView: View {
             }
             .background(AppBackground())
             .navigationTitle("搜索")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }

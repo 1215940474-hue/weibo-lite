@@ -10,11 +10,12 @@ struct StatusCardView: View {
                 header
 
                 if !status.plainText.isEmpty {
-                    Text(status.plainText)
-                        .font(.system(size: 16))
-                        .lineSpacing(4)
+                    LinkableText(text: status.plainText, font: .system(size: 16), lineSpacing: 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+                }
+
+                if !status.videoURL.isEmpty, let videoURL = URL(string: status.videoURL) {
+                    WeiboVideoPlayer(url: videoURL)
                 }
 
                 if !status.pics.isEmpty {
@@ -82,11 +83,17 @@ struct RepostView: View {
                 .foregroundStyle(.secondary)
 
             if !status.plainText.isEmpty {
-                Text(status.plainText)
-                    .font(.system(size: 15))
-                    .lineSpacing(3)
-                    .lineLimit(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                LinkableText(
+                    text: status.plainText,
+                    font: .system(size: 15),
+                    lineSpacing: 3,
+                    lineLimit: 8
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if !status.videoURL.isEmpty, let videoURL = URL(string: status.videoURL) {
+                WeiboVideoPlayer(url: videoURL)
             }
 
             if !status.pics.isEmpty {
@@ -102,7 +109,7 @@ struct RepostView: View {
     }
 }
 
-/// 九宫格配图（可点击查看大图）。
+/// 九宫格配图：单图按真实比例显示，多图九宫格；可点击看大图。
 struct ImageGrid: View {
     let pics: [WBPic]
     var onTap: ((Int) -> Void)? = nil
@@ -111,8 +118,9 @@ struct ImageGrid: View {
         let urls = pics.compactMap { $0.url }
         if !urls.isEmpty {
             if urls.count == 1 {
-                cell(urls[0], index: 0)
-                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                AdaptiveRemoteImage(url: urls[0])
+                    .contentShape(Rectangle())
+                    .onTapGesture { onTap?(0) }
             } else {
                 let columns = urls.count == 4 ? 2 : 3
                 LazyVGrid(
@@ -120,39 +128,14 @@ struct ImageGrid: View {
                     spacing: 4
                 ) {
                     ForEach(Array(urls.enumerated()), id: \.offset) { item in
-                        cell(item.element, index: item.offset)
+                        RemoteImageView(url: item.element, contentMode: .fill)
                             .aspectRatio(1, contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .contentShape(Rectangle())
+                            .onTapGesture { onTap?(item.offset) }
                     }
                 }
             }
         }
-    }
-
-    private func cell(_ url: URL, index: Int) -> some View {
-        ImageCell(url: url)
-            .contentShape(Rectangle())
-            .onTapGesture { onTap?(index) }
-    }
-}
-
-private struct ImageCell: View {
-    let url: URL
-
-    var body: some View {
-        Color.clear
-            .overlay {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    case .failure:
-                        Image(systemName: "photo")
-                            .foregroundStyle(.secondary)
-                    default:
-                        ProgressView()
-                    }
-                }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

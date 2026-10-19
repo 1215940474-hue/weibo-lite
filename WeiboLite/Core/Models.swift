@@ -19,11 +19,13 @@ struct ContainerData: Decodable {
     let cards: [Card]
     let sinceID: Int64
     let maxID: Int64
+    let userInfo: WBUser?
 
     private enum CodingKeys: String, CodingKey {
         case cards
         case sinceID = "since_id"
         case maxID = "max_id"
+        case userInfo
     }
 
     init(from decoder: Decoder) throws {
@@ -31,6 +33,7 @@ struct ContainerData: Decodable {
         cards = container.soft([Card].self, .cards) ?? []
         sinceID = Int64(container.soft(FlexID.self, .sinceID)?.value ?? "") ?? 0
         maxID = Int64(container.soft(FlexID.self, .maxID)?.value ?? "") ?? 0
+        userInfo = container.soft(WBUser.self, .userInfo)
     }
 
     /// 只保留真正的微博卡片（card_type == 9），其余（广告位、话题、分组头）全部丢掉。
@@ -117,6 +120,8 @@ final class MBlog: Decodable, Identifiable {
     let attitudesCount: Int
     let isLongText: Bool
     let isAd: Bool
+    /// 视频地址（page_info.type == "video" 时非空）
+    let videoURL: String
 
     var id: String { statusID.isEmpty ? mid : statusID }
     /// 用于导航/请求详情的 id（m.weibo.cn 用 mid）
@@ -140,6 +145,7 @@ final class MBlog: Decodable, Identifiable {
         case isLongText
         case isAd = "is_ad"
         case promotion
+        case pageInfo = "page_info"
     }
 
     init(from decoder: Decoder) throws {
@@ -160,6 +166,7 @@ final class MBlog: Decodable, Identifiable {
         let hasPromotion = (container.soft(AnyJSON.self, .promotion)) != nil
         let adFlag = (container.soft(FlexInt.self, .isAd)?.value ?? 0) == 1
         isAd = hasPromotion || adFlag
+        videoURL = container.soft(PageInfo.self, .pageInfo)?.bestVideoURL ?? ""
     }
 }
 
@@ -270,6 +277,7 @@ struct WBComment: Decodable, Identifiable {
     let text: String
     let createdAt: String
     let likeCounts: Int
+    let replyCount: Int
     let user: WBUser?
 
     var id: String { cid }
@@ -281,6 +289,7 @@ struct WBComment: Decodable, Identifiable {
         case text
         case createdAt = "created_at"
         case likeCounts = "like_counts"
+        case replyCount = "total_number"
         case user
     }
 
@@ -290,6 +299,7 @@ struct WBComment: Decodable, Identifiable {
         text = container.soft(String.self, .text) ?? ""
         createdAt = container.soft(String.self, .createdAt) ?? ""
         likeCounts = container.soft(FlexInt.self, .likeCounts)?.value ?? 0
+        replyCount = container.soft(FlexInt.self, .replyCount)?.value ?? 0
         user = container.soft(WBUser.self, .user)
     }
 }
@@ -312,13 +322,15 @@ struct ConfigResponse: Decodable {
 struct ConfigData: Decodable {
     let uid: String
     let user: WBUser?
+    let st: String
 
-    private enum CodingKeys: String, CodingKey { case uid, user }
+    private enum CodingKeys: String, CodingKey { case uid, user, st }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         uid = container.soft(FlexID.self, .uid)?.value ?? ""
         user = container.soft(WBUser.self, .user)
+        st = container.soft(String.self, .st) ?? ""
     }
 }
 
@@ -383,5 +395,98 @@ struct ProfileInfoData: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         userInfo = container.soft(WBUser.self, .userInfo)
             ?? container.soft(WBUser.self, .userInfoSnake)
+    }
+}
+
+// MARK: - 视频 page_info
+
+/// 字典里可能是字符串、也可能是对象，统一按字符串兜底
+struct FlexString: Decodable {
+    let value: String
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let string = try? container.decode(String.self) {
+            value = string
+        } else {
+            value = ""
+        }
+    }
+}
+
+struct MediaInfo: Decodable {
+    let streamURL: String
+    let streamURLHD: String
+    let mp4HD: String
+    let mp4720: String
+
+    private enum CodingKeys: String, CodingKey {
+        case streamURL = "stream_url"
+        case streamURLHD = "stream_url_hd"
+        case mp4HD = "mp4_hd_url"
+        case mp4720 = "mp4_720p_mp4"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        streamURL = container.soft(String.self, .streamURL) ?? ""
+        streamURLHD = container.soft(String.self, .streamURLHD) ?? ""
+        mp4HD = container.soft(String.self, .mp4HD) ?? ""
+        mp4720 = container.soft(String.self, .mp4720) ?? ""
+    }
+}
+
+struct PageInfo: Decodable {
+    let type: String
+    let pageURL: String
+    let mediaInfo: MediaInfo?
+    let urls: [String: FlexString]
+
+    private enum CodingKeys: String, CodingKey {
+        case type
+        case pageURL = "page_url"
+        case mediaInfo = "media_info"
+        case urls
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = container.soft(String.self, .type) ?? ""
+        pageURL = container.soft(String.self, .pageURL) ?? ""
+        mediaInfo = container.soft(MediaInfo.self, .mediaInfo)
+        urls = container.soft([String: FlexString].self, .urls) ?? [:]
+    }
+
+    /// 视频地址优先级：720p mp4 → hd mp4 → sd → stream
+    var bestVideoURL: String {
+        for key in ["mp4_720p_mp4", "mp4_hd_url", "mp4_sd_url"] {
+            if let value = urls[key]?.value, !value.isEmpty {
+                return value
+            }
+        }
+        if let info = mediaInfo {
+            for candidate in [info.mp4720, info.mp4HD, info.streamURLHD, info.streamURL] where !candidate.isEmpty {
+                return candidate
+            }
+        }
+        return ""
+    }
+}
+
+// MARK: - 楼中楼回复 /comments/hotFlowChild
+
+struct CommentRepliesResponse: Decodable {
+    let ok: Int
+    let replies: [WBComment]
+
+    private enum CodingKeys: String, CodingKey {
+        case ok
+        case data
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        replies = container.soft([WBComment].self, .data) ?? []
     }
 }

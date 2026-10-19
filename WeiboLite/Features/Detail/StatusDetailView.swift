@@ -13,11 +13,15 @@ struct StatusDetailView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             header(status)
                             if !status.plainText.isEmpty {
-                                Text(status.plainText)
-                                    .font(.system(size: 17))
-                                    .lineSpacing(5)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .textSelection(.enabled)
+                                LinkableText(
+                                    text: status.plainText,
+                                    font: .system(size: 17),
+                                    lineSpacing: 5
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            if !status.videoURL.isEmpty, let videoURL = URL(string: status.videoURL) {
+                                WeiboVideoPlayer(url: videoURL)
                             }
                             if !status.pics.isEmpty {
                                 TappableImageGrid(pics: status.pics)
@@ -104,6 +108,10 @@ struct StatusDetailView: View {
 struct CommentRow: View {
     let comment: WBComment
 
+    @State private var replies: [WBComment] = []
+    @State private var isLoadingReplies = false
+    @State private var expanded = false
+
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 8) {
@@ -116,15 +124,93 @@ struct CommentRow: View {
                     CountLabel(icon: "hand.thumbsup", count: comment.likeCounts)
                 }
 
-                Text(comment.plainText)
-                    .font(.system(size: 15))
+                LinkableText(text: comment.plainText, font: .system(size: 15))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
 
+                HStack(spacing: 12) {
+                    Text(comment.displayTime)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+
+                    if comment.replyCount > 0 {
+                        Button {
+                            toggleReplies()
+                        } label: {
+                            Text(expanded ? "收起回复" : "查看 \(comment.replyCount) 条回复")
+                                .font(.caption2)
+                                .foregroundStyle(.blue)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if expanded {
+                    if isLoadingReplies {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(.leading, 36)
+                    } else if replies.isEmpty {
+                        Text("暂无回复")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 36)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(replies) { reply in
+                                ReplyRow(comment: reply)
+                            }
+                        }
+                        .padding(.leading, 36)
+                        .padding(.top, 2)
+                    }
+                }
+            }
+        }
+    }
+
+    private func toggleReplies() {
+        if expanded {
+            expanded = false
+            return
+        }
+        expanded = true
+        guard replies.isEmpty else { return }
+
+        isLoadingReplies = true
+        Task {
+            defer { isLoadingReplies = false }
+            guard let url = WeiboEndpoint.commentReplies(cid: comment.cid) else { return }
+            if let response: CommentRepliesResponse = try? await WeiboAPI.shared.get(url) {
+                replies = response.replies
+            }
+        }
+    }
+}
+
+/// 楼中楼单条回复
+struct ReplyRow: View {
+    let comment: WBComment
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                AvatarView(url: comment.user?.avatarURL, size: 20)
+                Text(comment.user?.screenName ?? "微博用户")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
                 Text(comment.displayTime)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                Spacer(minLength: 0)
             }
+
+            LinkableText(text: comment.plainText, font: .system(size: 14))
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemBackground).opacity(0.6))
+        )
     }
 }

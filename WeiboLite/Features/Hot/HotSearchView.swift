@@ -79,6 +79,7 @@ struct HotSearchView: View {
             .padding(.bottom, 100)
         }
         .scrollIndicators(.hidden)
+        .overlay(alignment: .top) { TopBlurFade() }
         .refreshable { await store.load() }
         .task {
             if store.items.isEmpty { await store.load() }

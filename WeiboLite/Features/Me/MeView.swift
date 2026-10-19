@@ -17,8 +17,10 @@ struct MeView: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
+            .overlay(alignment: .top) { TopBlurFade() }
             .background(AppBackground())
             .navigationTitle("我")
+            .navigationBarTitleDisplayMode(.inline)
             .task { await session.refreshProfile() }
             .refreshable { await session.refreshProfile() }
             .sheet(isPresented: $showLogin) {

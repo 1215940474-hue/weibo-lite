@@ -92,6 +92,8 @@ enum WeiboEndpoint {
     static func userTimelineContainer(uid: String) -> String { "107603\(uid)" }
     /// 搜索微博
     static func searchContainer(keyword: String) -> String { "100103type=1&q=\(keyword)" }
+    /// 推荐流（不按时间排序，官方推荐算法）
+    static let recommendContainer = "102803"
     /// 热搜榜
     static let hotSearchContainer = "106003type=25&filter_type=realtimehot"
 
@@ -108,10 +110,16 @@ enum WeiboEndpoint {
         return build(path: "/feed/friends", items: items)
     }
 
-    static func container(id: String, page: Int = 1) -> URL? {
+    static func container(id: String, page: Int = 1, sinceID: Int64 = 0, pageType: String? = nil) -> URL? {
         var items: [URLQueryItem] = [URLQueryItem(name: "containerid", value: id)]
+        if sinceID > 0 {
+            items.append(URLQueryItem(name: "since_id", value: String(sinceID)))
+        }
         if page > 1 {
             items.append(URLQueryItem(name: "page", value: String(page)))
+        }
+        if let pageType = pageType, !pageType.isEmpty {
+            items.append(URLQueryItem(name: "page_type", value: pageType))
         }
         items.append(URLQueryItem(name: "openApp", value: "0"))
         return build(path: "/api/container/getIndex", items: items)
@@ -119,6 +127,24 @@ enum WeiboEndpoint {
 
     static func profileInfo(uid: String) -> URL? {
         build(path: "/profile/info", items: [URLQueryItem(name: "uid", value: uid)])
+    }
+
+    /// 用户主页容器（拿 userInfo 头像兜底）
+    static func userProfileContainer(uid: String) -> URL? {
+        build(path: "/api/container/getIndex", items: [
+            URLQueryItem(name: "type", value: "uid"),
+            URLQueryItem(name: "value", value: uid),
+            URLQueryItem(name: "containerid", value: "100505\(uid)")
+        ])
+    }
+
+    /// 楼中楼回复
+    static func commentReplies(cid: String, maxID: String = "0") -> URL? {
+        build(path: "/comments/hotFlowChild", items: [
+            URLQueryItem(name: "cid", value: cid),
+            URLQueryItem(name: "max_id", value: maxID),
+            URLQueryItem(name: "max_id_type", value: "0")
+        ])
     }
 
     static func status(mid: String) -> URL? {

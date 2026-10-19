@@ -16,6 +16,8 @@ final class WeiboSession: ObservableObject {
 
     private let cookieKey = "weibolite.cookies.v1"
     private let profileKey = "weibolite.profile.v1"
+    /// /api/config 返回的 st，用于 X-Xsrf-Token
+    private var stToken: String = ""
 
     var cookieHeader: String {
         cookieValues
@@ -59,44 +61,46 @@ final class WeiboSession: ObservableObject {
         }
     }
 
-    /// 拉取自己的昵称和头像：优先 /profile/info，失败再退回 /api/config
+    /// 拉取自己的昵称和头像：config → profile/info → 用户主页容器，三级兜底
     func refreshProfile() async {
         guard isLoggedIn else { return }
 
-        // 1) 没有 uid 时先取 uid
-        if uid.isEmpty {
-            if let url = WeiboEndpoint.config() {
-                if let response: ConfigResponse = try? await WeiboAPI.shared.get(url),
-                   let data = response.data {
-                    uid = data.uid
-                    apply(user: data.user)
-                }
+        // 1) /api/config：拿 uid、st（后续接口的 XSRF 校验）
+        if let url = WeiboEndpoint.config() {
+            if let response: ConfigResponse = try? await WeiboAPI.shared.get(url),
+               let data = response.data {
+                if !data.uid.isEmpty { uid = data.uid }
+                if !data.st.isEmpty { stToken = data.st }
+                apply(user: data.user)
             }
         }
 
-        // 2) 用 uid 拉完整资料（这里才有头像）
+        // 2) /profile/info：这里有完整头像
         if !uid.isEmpty, let url = WeiboEndpoint.profileInfo(uid: uid) {
-            let headers = ["X-Xsrf-Token": xsrfToken]
+            let headers = ["X-Xsrf-Token": effectiveXsrf]
             if let response: ProfileResponse = try? await WeiboAPI.shared.get(url, extraHeaders: headers),
                let user = response.data?.userInfo {
                 apply(user: user)
             }
         }
 
-        // 3) 兜底再试一次 config
-        if avatarURL == nil || screenName.isEmpty, let url = WeiboEndpoint.config() {
-            if let response: ConfigResponse = try? await WeiboAPI.shared.get(url),
-               let data = response.data {
-                if uid.isEmpty { uid = data.uid }
-                apply(user: data.user)
+        // 3) 用户主页容器：再兜底一次头像
+        if avatarURL == nil, !uid.isEmpty, let url = WeiboEndpoint.userProfileContainer(uid: uid) {
+            if let response: ContainerResponse = try? await WeiboAPI.shared.get(url),
+               let user = response.data?.userInfo {
+                apply(user: user)
             }
         }
 
         persistProfile()
         if uid.isEmpty {
-            // 所有接口都拿不到 uid，说明 Cookie 失效了
             isLoggedIn = false
         }
+    }
+
+    /// 优先用 /api/config 返回的 st，没有再退回 Cookie 里的 XSRF-TOKEN
+    private var effectiveXsrf: String {
+        stToken.isEmpty ? xsrfToken : stToken
     }
 
     private func apply(user: WBUser?) {

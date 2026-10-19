@@ -8,12 +8,14 @@ struct SearchRoute: Hashable {
 
 struct FeedView: View {
     enum HomeTab: String, CaseIterable {
+        case recommend = "推荐"
         case following = "关注"
         case hot = "热搜"
     }
 
+    @StateObject private var recommendStore = FeedStore(source: .recommend)
     @StateObject private var followingStore = FeedStore(source: .following)
-    @State private var tab: HomeTab = .following
+    @State private var tab: HomeTab = .recommend
 
     var body: some View {
         NavigationStack {
@@ -25,16 +27,21 @@ struct FeedView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, Theme.pagePadding)
-                .padding(.bottom, 8)
+                .padding(.top, 4)
+                .padding(.bottom, 6)
 
-                if tab == .following {
+                switch tab {
+                case .recommend:
+                    FeedList(store: recommendStore)
+                case .following:
                     FeedList(store: followingStore)
-                } else {
+                case .hot:
                     HotSearchView()
                 }
             }
             .background(AppBackground())
             .navigationTitle("微博轻读")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
@@ -45,7 +52,7 @@ struct FeedView: View {
     }
 }
 
-/// 信息流列表（关注 / 搜索结果 / 用户主页共用）。
+/// 信息流列表（推荐 / 关注 / 搜索结果 / 用户主页共用）。
 struct FeedList: View {
     @ObservedObject var store: FeedStore
 
@@ -84,6 +91,9 @@ struct FeedList: View {
             if store.isLoading, store.items.isEmpty {
                 ProgressView()
             }
+        }
+        .overlay(alignment: .top) {
+            TopBlurFade()
         }
         .task {
             if store.items.isEmpty { await store.reload() }

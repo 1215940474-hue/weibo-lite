@@ -80,3 +80,22 @@ struct ErrorStateView: View {
         }
     }
 }
+
+/// 顶部渐进模糊：滚动内容进入导航栏下方时逐渐虚化。
+struct TopBlurFade: View {
+    var height: CGFloat = 24
+
+    var body: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .frame(height: height)
+            .mask(
+                LinearGradient(
+                    colors: [Color.black, Color.black.opacity(0.55), Color.clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .allowsHitTesting(false)
+    }
+}
