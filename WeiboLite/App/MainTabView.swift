@@ -71,11 +71,7 @@ struct MainTabView: View {
             }
         }
         .padding(.horizontal, 6)
-        .background(.regularMaterial, in: Capsule(style: .continuous))
-        .overlay(
-            Capsule(style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.07), lineWidth: 0.8)
-        )
+        .glassSurface(Capsule(style: .continuous))
         .padding(.horizontal, 44)
         .padding(.top, 4)
         .padding(.bottom, 4)

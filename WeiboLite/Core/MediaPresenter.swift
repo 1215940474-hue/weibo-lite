@@ -11,6 +11,10 @@ final class MediaPresenter: ObservableObject {
         imagePayload = payload
     }
 
+    func closeImage() {
+        imagePayload = nil
+    }
+
     func openVideo(_ url: URL) {
         CrashTrace.log("openVideo \(url.absoluteString.prefix(120))")
         videoURL = URLIdentifiable(url: url)

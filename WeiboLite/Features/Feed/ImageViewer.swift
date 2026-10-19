@@ -29,14 +29,15 @@ enum WeiboImage {
 /// 全屏看图：淡入缩放出现（不上下跳）、左右翻页、单击退出、双击/双指缩放、长按弹保存确认。
 struct ImageViewer: View {
     let payload: ImageViewerPayload
-    @Environment(\.dismiss) private var dismiss
+    var onClose: () -> Void = {}
     @State private var index: Int
     @State private var appeared = false
     @State private var toast: String?
     @State private var dragOffset: CGFloat = 0
 
-    init(payload: ImageViewerPayload) {
+    init(payload: ImageViewerPayload, onClose: @escaping () -> Void = {}) {
         self.payload = payload
+        self.onClose = onClose
         _index = State(initialValue: payload.startIndex)
     }
 
@@ -49,7 +50,7 @@ struct ImageViewer: View {
                 ForEach(Array(payload.urls.enumerated()), id: \.offset) { item in
                     ViewerPage(
                         url: item.element,
-                        onDismiss: { dismiss() },
+                        onDismiss: onClose,
                         onSaveResult: { success in
                             showToast(success ? "已保存到相册" : "保存失败，请检查相册权限")
                         }
@@ -90,7 +91,7 @@ struct ImageViewer: View {
             }
             .onEnded { value in
                 if value.translation.height > 120 {
-                    dismiss()
+                    onClose()
                 } else {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
                         dragOffset = 0
@@ -108,7 +109,7 @@ struct ImageViewer: View {
             Spacer()
 
             Button {
-                dismiss()
+                onClose()
             } label: {
                 Image(systemName: "xmark")
                     .font(.headline)
