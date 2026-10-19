@@ -93,7 +93,19 @@ struct StatusDetailView: View {
         }
     }
 
+    @ViewBuilder
     private func header(_ status: MBlog) -> some View {
+        if let uid = status.user?.uid, !uid.isEmpty {
+            NavigationLink(value: UserRoute(uid: uid)) {
+                headerContent(status)
+            }
+            .buttonStyle(.plain)
+        } else {
+            headerContent(status)
+        }
+    }
+
+    private func headerContent(_ status: MBlog) -> some View {
         HStack(spacing: 10) {
             AvatarView(url: status.user?.avatarURL, size: 44)
             VStack(alignment: .leading, spacing: 3) {

@@ -1,9 +1,13 @@
 import SwiftUI
 
-/// 单条微博卡片：点击卡片任意非交互区域进入详情；图片/视频/全文按钮各自独立可点。
+/// 单条微博卡片：
+/// - 头像/昵称 → 个人主页
+/// - 正文 → 详情页
+/// - 图片/视频/全文按钮各自独立
 struct StatusCardView: View {
     let status: MBlog
 
+    @EnvironmentObject private var media: MediaPresenter
     @State private var fullTextHTML: String?
     @State private var isExpanded = false
     @State private var isLoadingFullText = false
@@ -11,18 +15,15 @@ struct StatusCardView: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                // 头部 + 正文 → 点击进详情（正文里的链接不抢点击，进详情后可点）
+                header
+
                 NavigationLink(value: status.navKey) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        header
-                        textSection
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+                    textSection
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
 
-                // 全文按钮放在链接外面，保证可点
                 if shouldShowFullButton && !isExpanded {
                     Button {
                         loadFullText()
@@ -58,32 +59,53 @@ struct StatusCardView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 10) {
-            AvatarView(url: status.user?.avatarURL, size: 38)
+            if let uid = status.user?.uid, !uid.isEmpty {
+                NavigationLink(value: UserRoute(uid: uid)) {
+                    AvatarView(url: status.user?.avatarURL, size: 38)
+                }
+                .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 4) {
+                        NavigationLink(value: UserRoute(uid: uid)) {
+                            Text(status.user?.screenName ?? "微博用户")
+                                .font(.system(size: 15, weight: .semibold))
+                                .lineLimit(1)
+                        }
+                        .buttonStyle(.plain)
+
+                        if status.user?.verified == true {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                    timeRow
+                }
+            } else {
+                AvatarView(url: status.user?.avatarURL, size: 38)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(status.user?.screenName ?? "微博用户")
                         .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
-                    if status.user?.verified == true {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                    }
+                    timeRow
                 }
-                HStack(spacing: 6) {
-                    Text(status.displayTime)
-                    if !status.source.isEmpty {
-                        Text("来自 \(status.source)")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
             }
 
             Spacer(minLength: 0)
         }
+    }
+
+    private var timeRow: some View {
+        HStack(spacing: 6) {
+            Text(status.displayTime)
+            if !status.source.isEmpty {
+                Text("来自 \(status.source)")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
     }
 
     private var textSection: some View {
@@ -139,12 +161,22 @@ struct StatusCardView: View {
 /// 转发/引用的原微博。
 struct RepostView: View {
     let status: MBlog
+    @EnvironmentObject private var media: MediaPresenter
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("@\(status.user?.screenName ?? "微博用户")")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(.secondary)
+            if let uid = status.user?.uid, !uid.isEmpty {
+                NavigationLink(value: UserRoute(uid: uid)) {
+                    Text("@\(status.user?.screenName ?? "微博用户")")
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text("@\(status.user?.screenName ?? "微博用户")")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
 
             if !status.plainText.isEmpty {
                 RichTextView(

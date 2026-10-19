@@ -2,25 +2,41 @@ import AVFoundation
 import AVKit
 import SwiftUI
 
+/// 同一时刻只允许一个视频播放，降低多 AVPlayer 并发解码导致的崩溃概率
+@MainActor
+private enum VideoRegistry {
+    static weak var current: AVPlayer?
+
+    static func activate(_ player: AVPlayer) {
+        if let current = current, current !== player {
+            current.pause()
+        }
+        current = player
+    }
+
+    static func release(_ player: AVPlayer) {
+        player.pause()
+        if current === player {
+            current = nil
+        }
+    }
+}
+
 /// 微博视频播放：
 /// - 自动播放（默认静音，可点喇叭开声音）
-/// - 使用 .ambient 音频会话，不占用灵动岛/锁屏的「正在播放」控件
-/// - 竖屏/长视频预览更高，横屏保持 16:9
-/// - 点击画面或全屏按钮进入全屏
-/// - 优先加载最高画质
+/// - .ambient 音频会话，不占用灵动岛/锁屏的「正在播放」控件
+/// - 竖屏/长视频预览更高，横屏 16:9
+/// - 点击全屏按钮/双击画面 → 根视图统一呈现全屏播放器
 struct WeiboVideoPlayer: View {
     let url: URL
-    /// 微博接口给的封面比例（可选），拿不到就等 AVAsset 探测
-    var fallbackAspect: CGFloat = 16.0 / 9.0
 
+    @EnvironmentObject private var media: MediaPresenter
     @State private var player: AVPlayer?
     @State private var aspect: CGFloat = 16.0 / 9.0
     @State private var isMuted = true
-    @State private var showFullScreen = false
 
     private var isPortrait: Bool { aspect < 1 }
 
-    /// 预览高度：横屏 16:9；竖屏/长视频更高
     private var previewHeight: CGFloat {
         let width = UIScreen.main.bounds.width - Theme.pagePadding * 2 - 28
         if isPortrait {
@@ -38,9 +54,6 @@ struct WeiboVideoPlayer: View {
                         .frame(maxWidth: .infinity)
                         .clipped()
                         .contentShape(Rectangle())
-                        .simultaneousGesture(
-                            TapGesture(count: 2).onEnded { showFullScreen = true }
-                        )
                 } else {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(Color(uiColor: .secondarySystemBackground))
@@ -58,7 +71,8 @@ struct WeiboVideoPlayer: View {
                 }
 
                 Button {
-                    showFullScreen = true
+                    player?.pause()
+                    media.openVideo(url)
                 } label: {
                     icon("arrow.up.left.and.arrow.down.right")
                 }
@@ -66,9 +80,10 @@ struct WeiboVideoPlayer: View {
             .padding(8)
         }
         .onAppear { setupIfNeeded() }
-        .onDisappear { player?.pause() }
-        .fullScreenCover(isPresented: $showFullScreen) {
-            FullScreenVideoView(player: player, onClose: { showFullScreen = false })
+        .onDisappear {
+            if let player = player {
+                VideoRegistry.release(player)
+            }
         }
     }
 
@@ -89,7 +104,6 @@ struct WeiboVideoPlayer: View {
     private func setupIfNeeded() {
         guard player == nil else { return }
 
-        // .ambient：不进入「正在播放」，不会出现在灵动岛/锁屏
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.ambient, mode: .moviePlayback, options: [.mixWithOthers])
         try? session.setActive(true)
@@ -99,6 +113,7 @@ struct WeiboVideoPlayer: View {
         newPlayer.isMuted = true
         newPlayer.allowsExternalPlayback = false
         player = newPlayer
+        VideoRegistry.activate(newPlayer)
         newPlayer.play()
 
         Task {
@@ -107,20 +122,17 @@ struct WeiboVideoPlayer: View {
                size.width > 0, size.height > 0 {
                 let width = abs(size.width)
                 let height = abs(size.height)
-                if height > width {
-                    aspect = width / height
-                } else {
-                    aspect = 16.0 / 9.0
-                }
+                aspect = height > width ? width / height : 16.0 / 9.0
             }
         }
     }
 }
 
-/// 全屏播放
-private struct FullScreenVideoView: View {
-    let player: AVPlayer?
-    let onClose: () -> Void
+/// 全屏播放器（由根视图通过 MediaPresenter 呈现，自己的 player，避免和列表里的抢资源）
+struct FullScreenVideoPlayer: View {
+    let url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var player: AVPlayer?
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -135,7 +147,7 @@ private struct FullScreenVideoView: View {
 
             Button {
                 player?.pause()
-                onClose()
+                dismiss()
             } label: {
                 Image(systemName: "xmark")
                     .font(.headline)
@@ -144,6 +156,18 @@ private struct FullScreenVideoView: View {
                     .background(Color.white.opacity(0.2), in: Circle())
             }
             .padding()
+        }
+        .onAppear {
+            guard player == nil else { return }
+            let session = AVAudioSession.sharedInstance()
+            try? session.setCategory(.ambient, mode: .moviePlayback, options: [.mixWithOthers])
+            let newPlayer = AVPlayer(url: url)
+            newPlayer.allowsExternalPlayback = false
+            player = newPlayer
+            newPlayer.play()
+        }
+        .onDisappear {
+            player?.pause()
         }
     }
 }

@@ -34,6 +34,9 @@ struct SearchView: View {
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
+            .navigationDestination(for: UserRoute.self) { route in
+                UserProfileView(uid: route.uid)
+            }
         }
     }
 

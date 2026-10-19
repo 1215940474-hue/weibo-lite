@@ -193,25 +193,18 @@ private struct ViewerPage: View {
     }
 }
 
-/// 自带大图查看能力的图片九宫格。
+/// 自带大图查看能力的图片九宫格（由根视图统一呈现查看器）。
 struct TappableImageGrid: View {
     let pics: [WBPic]
-    @State private var viewer: ImageViewerPayload?
+    @EnvironmentObject private var media: MediaPresenter
 
     var body: some View {
         ImageGrid(pics: pics) { index in
             let urls = pics.compactMap { $0.url }
             guard !urls.isEmpty else { return }
-            let payload = ImageViewerPayload(urls: urls, startIndex: min(index, urls.count - 1))
-            // 关掉系统默认的上下滑入动画，改用查看器内部的淡入缩放
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                viewer = payload
-            }
-        }
-        .fullScreenCover(item: $viewer) { payload in
-            ImageViewer(payload: payload)
+            media.openImage(
+                ImageViewerPayload(urls: urls, startIndex: min(index, urls.count - 1))
+            )
         }
     }
 }

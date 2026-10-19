@@ -45,6 +45,9 @@ struct FeedView: View {
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
+            .navigationDestination(for: UserRoute.self) { route in
+                UserProfileView(uid: route.uid)
+            }
             .navigationDestination(for: SearchRoute.self) { route in
                 SearchResultView(keyword: route.keyword)
             }

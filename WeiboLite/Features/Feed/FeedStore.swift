@@ -15,6 +15,7 @@ final class FeedStore: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isLoadingMore = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var canLoadMore = true
 
     private let source: Source
     private var page = 1
@@ -22,6 +23,7 @@ final class FeedStore: ObservableObject {
     /// 推荐流翻页游标（cardlistInfo.since_id，字符串原样传回）
     private var recommendCursor = ""
     private var seen: Set<String> = []
+    private var emptyLoadCount = 0
 
     init(source: Source) {
         self.source = source
@@ -34,6 +36,8 @@ final class FeedStore: ObservableObject {
         page = 1
         followingCursor = ""
         recommendCursor = ""
+        emptyLoadCount = 0
+        canLoadMore = true
         defer { isLoading = false }
 
         do {
@@ -49,7 +53,7 @@ final class FeedStore: ObservableObject {
     }
 
     func loadMore() async {
-        guard !isLoading, !isLoadingMore, !items.isEmpty else { return }
+        guard !isLoading, !isLoadingMore, !items.isEmpty, canLoadMore else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
 
@@ -65,6 +69,15 @@ final class FeedStore: ObservableObject {
                 page += 1
             } else if !blogs.isEmpty, case .user = source {
                 page += 1
+            }
+            if added.isEmpty {
+                // 连续两页没有新内容就停止上拉，避免死循环请求
+                emptyLoadCount += 1
+                if emptyLoadCount >= 2 {
+                    canLoadMore = false
+                }
+            } else {
+                emptyLoadCount = 0
             }
             items.append(contentsOf: added)
         } catch {

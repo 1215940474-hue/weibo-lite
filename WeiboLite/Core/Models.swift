@@ -194,6 +194,7 @@ struct WBUser: Decodable, Hashable {
     let screenName: String
     let avatarURL: URL?
     let verified: Bool
+    let descriptionText: String
 
     private enum CodingKeys: String, CodingKey {
         case uid = "id"
@@ -201,6 +202,7 @@ struct WBUser: Decodable, Hashable {
         case avatarLarge = "avatar_large"
         case avatar = "profile_image_url"
         case verified
+        case descriptionText = "description"
     }
 
     init(from decoder: Decoder) throws {
@@ -212,6 +214,7 @@ struct WBUser: Decodable, Hashable {
             ?? ""
         avatarURL = URL(string: rawAvatar.replacingOccurrences(of: "http://", with: "https://"))
         verified = container.soft(Bool.self, .verified) ?? false
+        descriptionText = HTMLText.plain(container.soft(String.self, .descriptionText) ?? "")
     }
 }
 
