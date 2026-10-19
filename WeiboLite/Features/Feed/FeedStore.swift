@@ -18,9 +18,9 @@ final class FeedStore: ObservableObject {
     @Published private(set) var canLoadMore = true
 
     private let source: Source
+    /// 当前已经成功加载到的页码（搜索/用户主页用）
     private var page = 1
     private var followingCursor = ""
-    /// 推荐流翻页游标（cardlistInfo.since_id，字符串原样传回）
     private var recommendCursor = ""
     private var seen: Set<String> = []
     private var emptyLoadCount = 0
@@ -38,11 +38,11 @@ final class FeedStore: ObservableObject {
         recommendCursor = ""
         emptyLoadCount = 0
         canLoadMore = true
+        CrashTrace.log("feed reload start \(source)")
         defer { isLoading = false }
 
-        CrashTrace.log("feed reload start \(source)")
         do {
-            let blogs = try await fetch(isFirst: true)
+            let blogs = try await fetchFirst()
             CrashTrace.log("feed reload ok \(source) count=\(blogs.count)")
             seen = Set(blogs.map { $0.navKey })
             items = blogs
@@ -61,20 +61,13 @@ final class FeedStore: ObservableObject {
         defer { isLoadingMore = false }
 
         do {
-            let blogs = try await fetch(isFirst: false)
+            let blogs = try await fetchNext()
             var added: [MBlog] = []
             for blog in blogs where !seen.contains(blog.navKey) {
                 seen.insert(blog.navKey)
                 added.append(blog)
             }
-            // 有内容才推进页码，避免接口失败后一直空转
-            if !blogs.isEmpty, case .search = source {
-                page += 1
-            } else if !blogs.isEmpty, case .user = source {
-                page += 1
-            }
             if added.isEmpty {
-                // 连续两页没有新内容就停止上拉，避免死循环请求
                 emptyLoadCount += 1
                 if emptyLoadCount >= 2 {
                     canLoadMore = false
@@ -90,28 +83,55 @@ final class FeedStore: ObservableObject {
 
     // MARK: - 网络
 
-    private func fetch(isFirst: Bool) async throws -> [MBlog] {
+    private func fetchFirst() async throws -> [MBlog] {
         switch source {
         case .recommend:
-            return try await fetchRecommend(isFirst: isFirst)
+            return try await fetchRecommend(isFirst: true)
         case .following:
-            return try await fetchFollowing(maxID: isFirst ? nil : followingCursor)
+            return try await fetchFollowing(maxID: nil)
         case .user(let uid):
             return try await fetchContainer(
                 id: WeiboEndpoint.userTimelineContainer(uid: uid),
-                page: isFirst ? 1 : page,
+                page: 1,
                 pageType: nil
             )
         case .search(let keyword):
             return try await fetchContainer(
                 id: WeiboEndpoint.searchContainer(keyword: keyword),
-                page: isFirst ? 1 : page,
+                page: 1,
                 pageType: "searchall"
             )
         }
     }
 
-    /// 推荐流：102803 容器，优先用 since_id 游标翻页
+    /// 翻页：先把 next 页码算出来再请求（之前是请求完之后才自增，等于每次都在请求上一页）
+    private func fetchNext() async throws -> [MBlog] {
+        switch source {
+        case .following:
+            return try await fetchFollowing(maxID: followingCursor)
+        case .recommend:
+            return try await fetchRecommend(isFirst: false)
+        case .user(let uid):
+            let nextPage = page + 1
+            let blogs = try await fetchContainer(
+                id: WeiboEndpoint.userTimelineContainer(uid: uid),
+                page: nextPage,
+                pageType: nil
+            )
+            if !blogs.isEmpty { page = nextPage }
+            return blogs
+        case .search(let keyword):
+            let nextPage = page + 1
+            let blogs = try await fetchContainer(
+                id: WeiboEndpoint.searchContainer(keyword: keyword),
+                page: nextPage,
+                pageType: "searchall"
+            )
+            if !blogs.isEmpty { page = nextPage }
+            return blogs
+        }
+    }
+
     private func fetchRecommend(isFirst: Bool) async throws -> [MBlog] {
         if !isFirst, recommendCursor.isEmpty { page += 1 }
         guard let url = WeiboEndpoint.container(
@@ -131,7 +151,6 @@ final class FeedStore: ObservableObject {
         return data.statusCards
     }
 
-    /// 真正的关注时间线：/feed/friends，按 max_id 游标翻页
     private func fetchFollowing(maxID: String?) async throws -> [MBlog] {
         guard WeiboSession.shared.isLoggedIn else {
             throw WeiboAPIError.notLoggedIn

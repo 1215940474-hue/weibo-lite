@@ -33,6 +33,7 @@ struct ImageViewer: View {
     @State private var index: Int
     @State private var appeared = false
     @State private var toast: String?
+    @State private var dragOffset: CGFloat = 0
 
     init(payload: ImageViewerPayload) {
         self.payload = payload
@@ -61,10 +62,12 @@ struct ImageViewer: View {
 
             topBar
         }
-        .scaleEffect(appeared ? 1 : 0.94)
-        .opacity(appeared ? 1 : 0)
+        .scaleEffect(appeared ? 1 : 0.96)
+        .offset(y: dragOffset)
+        .opacity(appeared ? (1 - min(dragOffset / 700, 0.45)) : 0)
+        .gesture(dismissGesture)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.18)) { appeared = true }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { appeared = true }
         }
         .overlay(alignment: .bottom) {
             if let toast = toast {
@@ -77,6 +80,23 @@ struct ImageViewer: View {
                     .padding(.bottom, 50)
             }
         }
+    }
+
+    private var dismissGesture: some Gesture {
+        DragGesture(minimumDistance: 15)
+            .onChanged { value in
+                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                dragOffset = max(0, value.translation.height)
+            }
+            .onEnded { value in
+                if value.translation.height > 120 {
+                    dismiss()
+                } else {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+                        dragOffset = 0
+                    }
+                }
+            }
     }
 
     private var topBar: some View {

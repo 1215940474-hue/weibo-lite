@@ -51,6 +51,21 @@ struct FeedView: View {
             .navigationDestination(for: SearchRoute.self) { route in
                 SearchResultView(keyword: route.keyword)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .homeRefreshRequested)) { _ in
+                refreshCurrentTab()
+            }
+        }
+    }
+
+    /// 再次点击「首页」标签时刷新当前分组
+    private func refreshCurrentTab() {
+        switch tab {
+        case .recommend:
+            Task { await recommendStore.reload() }
+        case .following:
+            Task { await followingStore.reload() }
+        case .hot:
+            break
         }
     }
 }
