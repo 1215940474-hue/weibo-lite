@@ -40,6 +40,7 @@ final class WeiboAPI {
         request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("https://m.weibo.cn/", forHTTPHeaderField: "Referer")
         request.setValue("XMLHttpRequest", forHTTPHeaderField: "X-Requested-With")
+        request.setValue("1", forHTTPHeaderField: "MWeibo-Pwa")
         request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
 
         let cookie = WeiboSession.shared.cookieHeader
