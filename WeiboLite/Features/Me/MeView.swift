@@ -72,6 +72,16 @@ struct MeView: View {
                 }
                 .buttonStyle(.plain)
 
+                Divider().padding(.vertical, 10)
+
+                if let logURL = CrashTrace.fileURL, FileManager.default.fileExists(atPath: logURL.path) {
+                    ShareLink(item: logURL) {
+                        rowLabel(title: "导出诊断日志", icon: "doc.text")
+                    }
+                } else {
+                    rowLabel(title: "暂无诊断日志", icon: "doc.text", tint: .secondary)
+                }
+
                 if session.isLoggedIn {
                     Divider().padding(.vertical, 10)
 

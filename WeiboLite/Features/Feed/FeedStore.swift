@@ -40,14 +40,17 @@ final class FeedStore: ObservableObject {
         canLoadMore = true
         defer { isLoading = false }
 
+        CrashTrace.log("feed reload start \(source)")
         do {
             let blogs = try await fetch(isFirst: true)
+            CrashTrace.log("feed reload ok \(source) count=\(blogs.count)")
             seen = Set(blogs.map { $0.navKey })
             items = blogs
             if blogs.isEmpty {
                 errorMessage = emptyHint
             }
         } catch {
+            CrashTrace.log("feed reload fail \(source) \(error)")
             errorMessage = describe(error)
         }
     }

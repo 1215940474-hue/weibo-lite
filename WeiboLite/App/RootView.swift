@@ -26,8 +26,9 @@ struct RootView: View {
 
     var body: some View {
         MainTabView()
-            .environmentObject(media)
+            .environment(\.mediaPresenter, media)
             .task {
+                CrashTrace.log("root task, loggedIn=\(session.isLoggedIn)")
                 if session.isLoggedIn {
                     await session.refreshProfile()
                 }

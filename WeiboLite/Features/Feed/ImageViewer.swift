@@ -196,7 +196,7 @@ private struct ViewerPage: View {
 /// 自带大图查看能力的图片九宫格（由根视图统一呈现查看器）。
 struct TappableImageGrid: View {
     let pics: [WBPic]
-    @EnvironmentObject private var media: MediaPresenter
+    @Environment(\.mediaPresenter) private var media: MediaPresenter
 
     var body: some View {
         ImageGrid(pics: pics) { index in

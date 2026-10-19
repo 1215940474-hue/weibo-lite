@@ -7,7 +7,7 @@ import SwiftUI
 struct StatusCardView: View {
     let status: MBlog
 
-    @EnvironmentObject private var media: MediaPresenter
+    @Environment(\.mediaPresenter) private var media: MediaPresenter
     @State private var fullTextHTML: String?
     @State private var isExpanded = false
     @State private var isLoadingFullText = false
@@ -54,6 +54,9 @@ struct StatusCardView: View {
 
                 footer
             }
+        }
+        .onAppear {
+            CrashTrace.log("card appear \(status.navKey) pics=\(status.pics.count) video=\(status.videoURL.isEmpty ? 0 : 1)")
         }
     }
 
@@ -161,7 +164,7 @@ struct StatusCardView: View {
 /// 转发/引用的原微博。
 struct RepostView: View {
     let status: MBlog
-    @EnvironmentObject private var media: MediaPresenter
+    @Environment(\.mediaPresenter) private var media: MediaPresenter
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

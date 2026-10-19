@@ -30,7 +30,7 @@ private enum VideoRegistry {
 struct WeiboVideoPlayer: View {
     let url: URL
 
-    @EnvironmentObject private var media: MediaPresenter
+    @Environment(\.mediaPresenter) private var media: MediaPresenter
     @State private var player: AVPlayer?
     @State private var aspect: CGFloat = 16.0 / 9.0
     @State private var isMuted = true
@@ -114,7 +114,7 @@ struct WeiboVideoPlayer: View {
         newPlayer.allowsExternalPlayback = false
         player = newPlayer
         VideoRegistry.activate(newPlayer)
-        newPlayer.play()
+        CrashTrace.log("video setup \(url.absoluteString.prefix(100))")
 
         Task {
             if let track = try? await item.asset.loadTracks(withMediaType: .video).first,

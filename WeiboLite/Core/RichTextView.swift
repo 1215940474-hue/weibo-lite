@@ -78,6 +78,7 @@ enum RichHTML {
                 let before = ns.substring(with: NSRange(location: last, length: match.range.location - last))
                 appendText(&segments, before)
             }
+            guard match.numberOfRanges > 1 else { continue }
             if let index = Int(ns.substring(with: match.range(at: 1))), index >= 0, index < links.count {
                 segments.append(.link(label: links[index].label, url: links[index].url))
             }
@@ -180,6 +181,7 @@ struct RichTextView: View {
 
     private func build() {
         let parsed = RichHTML.segments(from: html)
+        CrashTrace.log("richtext build html=\(html.count) chars segments=\(parsed.count)")
         segments = parsed
         // 表情图的点高度 = 字号，保证和正文一样大
         let emojiHeight = max(14, fontSize * 1.0)

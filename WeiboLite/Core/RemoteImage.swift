@@ -33,12 +33,13 @@ final class ImageLoader {
 
     /// 表情图：加载并缩放到和正文文字一样高（size 用点，避免二次乘 scale 变大）
     func loadEmoji(_ url: URL, pointHeight: CGFloat = 19, completion: @escaping (UIImage?) -> Void) {
+        let safeHeight = (pointHeight.isFinite && pointHeight > 4) ? min(pointHeight, 64) : 19
         load(url) { image in
-            guard let image = image else {
+            guard let image = image, image.size.width > 0, image.size.height > 0 else {
                 completion(nil)
                 return
             }
-            let size = CGSize(width: pointHeight, height: pointHeight)
+            let size = CGSize(width: safeHeight, height: safeHeight)
             let format = UIGraphicsImageRendererFormat.default()
             format.scale = UIScreen.main.scale
             let renderer = UIGraphicsImageRenderer(size: size, format: format)

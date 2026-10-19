@@ -22,13 +22,15 @@ targets:
       path: Support/Info.plist
       properties:
         CFBundleDisplayName: 微博轻读
-        CFBundleShortVersionString: "0.6.0"
-        CFBundleVersion: "6"
+        CFBundleShortVersionString: "0.6.1"
+        CFBundleVersion: "7"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UIRequiresFullScreen: true
         ITSAppUsesNonExemptEncryption: false
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         NSPhotoLibraryAddUsageDescription: 保存图片到相册
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: false
