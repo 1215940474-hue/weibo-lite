@@ -4,10 +4,12 @@ import UIKit
 enum RichSegment: Hashable {
     case text(String)
     case emoji(alt: String, url: URL?)
+    case link(label: String, url: URL?)
 }
 
-/// 把微博的 HTML 正文拆成「文字 / 官方表情图」两种片段。
-/// 同时把 <a href="..."> 的锚文本替换成真实 URL，保证链接可见、可点、可标蓝。
+/// 解析微博 HTML：
+/// - `<img class="emoji">` → 官方表情图
+/// - `<a href>` → 显示锚文本（官方就是「网页链接」「#话题#」「@用户」），不再显示裸 URL
 enum RichHTML {
     private static let imgRegex = try? NSRegularExpression(pattern: "<img[^>]*>", options: [.caseInsensitive])
     private static let altRegex = try? NSRegularExpression(pattern: "alt=\"([^\"]*)\"", options: [.caseInsensitive])
@@ -16,33 +18,75 @@ enum RichHTML {
         pattern: "<a[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>",
         options: [.caseInsensitive, .dotMatchesLineSeparators]
     )
+    private static let placeholderRegex = try? NSRegularExpression(pattern: "\u{1}(\\d+)\u{1}")
 
     static func segments(from html: String) -> [RichSegment] {
-        var text = replaceAnchors(html)
+        var working = html
+        var links: [(label: String, url: URL?)] = []
+
+        // 1) 把 <a> 换成占位符，避免链接文字被当普通文本
+        if let regex = anchorRegex {
+            let ns = working as NSString
+            let matches = regex.matches(in: working, options: [], range: NSRange(location: 0, length: ns.length))
+            let result = NSMutableString(string: working)
+            for (index, match) in matches.enumerated().reversed() where match.numberOfRanges > 2 {
+                let href = ns.substring(with: match.range(at: 1))
+                let inner = ns.substring(with: match.range(at: 2))
+                links.insert((label: linkLabel(inner: inner), url: normalURL(href)), at: index)
+                result.replaceCharacters(in: match.range, with: "\u{1}\(index)\u{1}")
+            }
+            working = result as String
+        }
+
+        // 2) 按 <img> 切分，图片之间/前后的文字再按占位符切出链接
         var segments: [RichSegment] = []
-        let ns = text as NSString
-        let matches = imgRegex?.matches(in: text, options: [], range: NSRange(location: 0, length: ns.length)) ?? []
+        let ns = working as NSString
+        let imgMatches = imgRegex?.matches(in: working, options: [], range: NSRange(location: 0, length: ns.length)) ?? []
         var cursor = 0
 
-        for match in matches {
+        for match in imgMatches {
             if match.range.location > cursor {
                 let before = ns.substring(with: NSRange(location: cursor, length: match.range.location - cursor))
-                appendText(&segments, before)
+                appendChunk(&segments, before, links: links)
             }
             let tag = ns.substring(with: match.range)
             let alt = firstGroup(in: tag, regex: altRegex)
             let src = firstGroup(in: tag, regex: srcRegex)
-            let url = normalizedURL(src)
-            if !alt.isEmpty || url != nil {
-                segments.append(.emoji(alt: alt.isEmpty ? "[表情]" : alt, url: url))
+            if !alt.isEmpty || !src.isEmpty {
+                segments.append(.emoji(alt: alt.isEmpty ? "[表情]" : alt, url: normalURL(src)))
             }
             cursor = match.range.location + match.range.length
         }
 
         if cursor < ns.length {
-            appendText(&segments, ns.substring(from: cursor))
+            appendChunk(&segments, ns.substring(from: cursor), links: links)
         }
         return segments
+    }
+
+    private static func appendChunk(
+        _ segments: inout [RichSegment],
+        _ raw: String,
+        links: [(label: String, url: URL?)]
+    ) {
+        let ns = raw as NSString
+        let matches = placeholderRegex?.matches(in: raw, options: [], range: NSRange(location: 0, length: ns.length)) ?? []
+        var last = 0
+
+        for match in matches {
+            if match.range.location > last {
+                let before = ns.substring(with: NSRange(location: last, length: match.range.location - last))
+                appendText(&segments, before)
+            }
+            if let index = Int(ns.substring(with: match.range(at: 1))), index >= 0, index < links.count {
+                segments.append(.link(label: links[index].label, url: links[index].url))
+            }
+            last = match.range.location + match.range.length
+        }
+
+        if last < ns.length {
+            appendText(&segments, ns.substring(from: last))
+        }
     }
 
     private static func appendText(_ segments: inout [RichSegment], _ raw: String) {
@@ -55,16 +99,22 @@ enum RichHTML {
         }
     }
 
-    private static func replaceAnchors(_ html: String) -> String {
-        guard let regex = anchorRegex else { return html }
-        let ns = html as NSString
-        let result = NSMutableString(string: html)
-        let matches = regex.matches(in: html, options: [], range: NSRange(location: 0, length: ns.length))
-        for match in matches.reversed() where match.numberOfRanges > 1 {
-            let href = ns.substring(with: match.range(at: 1))
-            result.replaceCharacters(in: match.range, with: href)
-        }
-        return result as String
+    /// 官方样式：网页外链统一显示「网页链接」；话题 #xxx#、@用户 原样保留
+    private static func linkLabel(inner: String) -> String {
+        let label = HTMLText.plain(inner).trimmingCharacters(in: .whitespacesAndNewlines)
+        if label.isEmpty { return "网页链接" }
+        if label.hasPrefix("#") || label.hasPrefix("@") { return label }
+        if label.contains("网页链接") || label.contains("全文") { return "网页链接" }
+        if label.count > 14 || label.lowercased().hasPrefix("http") { return "网页链接" }
+        return label
+    }
+
+    private static func normalURL(_ raw: String) -> URL? {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        if value.hasPrefix("//") { return URL(string: "https:" + value) }
+        if value.hasPrefix("http") { return URL(string: value) }
+        return nil
     }
 
     private static func firstGroup(in text: String, regex: NSRegularExpression?) -> String {
@@ -74,22 +124,18 @@ enum RichHTML {
               match.numberOfRanges > 1 else { return "" }
         return ns.substring(with: match.range(at: 1))
     }
-
-    private static func normalizedURL(_ src: String) -> URL? {
-        guard !src.isEmpty else { return nil }
-        if src.hasPrefix("//") {
-            return URL(string: "https:" + src)
-        }
-        return URL(string: src)
-    }
 }
 
-/// 渲染正文：文字 + 官方表情图 + 蓝色可点链接。
+/// 渲染正文：文字 + 官方表情图 + 蓝色链接。
+/// - `interactiveLinks`: 卡片里包着 NavigationLink 时设为 false，避免抢走卡片点击
 struct RichTextView: View {
     let html: String
     var font: Font = .system(size: 16)
+    /// 字号（用于计算表情图高度，让表情和文字一样大）
+    var fontSize: CGFloat = 16
     var lineSpacing: CGFloat = 4
     var lineLimit: Int? = nil
+    var interactiveLinks: Bool = true
 
     @State private var segments: [RichSegment] = []
     @State private var emojiImages: [Int: UIImage] = [:]
@@ -99,7 +145,6 @@ struct RichTextView: View {
             .font(font)
             .lineSpacing(lineSpacing)
             .lineLimit(lineLimit)
-            .tint(.blue)
             .environment(\.openURL, OpenURLAction { url in
                 UIApplication.shared.open(url)
                 return .handled
@@ -114,13 +159,20 @@ struct RichTextView: View {
         for (index, segment) in segments.enumerated() {
             switch segment {
             case .text(let string):
-                result = result + Text(linked(string))
+                result = result + Text(string)
             case .emoji(let alt, _):
                 if let image = emojiImages[index] {
                     result = result + Text(Image(uiImage: image))
                 } else {
                     result = result + Text(alt)
                 }
+            case .link(let label, let url):
+                var part = AttributedString(label)
+                part.foregroundColor = .blue
+                if interactiveLinks, let url = url {
+                    part.link = url
+                }
+                result = result + Text(part)
             }
         }
         return result
@@ -129,44 +181,14 @@ struct RichTextView: View {
     private func build() {
         let parsed = RichHTML.segments(from: html)
         segments = parsed
+        // 表情图的点高度 = 字号，保证和正文一样大
+        let emojiHeight = max(14, fontSize * 1.0)
         for (index, segment) in parsed.enumerated() {
             guard case .emoji(_, let url) = segment, let url = url else { continue }
-            ImageLoader.shared.loadEmoji(url) { image in
+            ImageLoader.shared.loadEmoji(url, pointHeight: emojiHeight) { image in
                 guard let image = image else { return }
                 emojiImages[index] = image
             }
         }
-    }
-
-    /// 把纯文本里的 URL 标成蓝色可点
-    private func linked(_ string: String) -> AttributedString {
-        guard let detector = try? NSDataDetector(
-            types: NSTextCheckingResult.CheckingType.link.rawValue
-        ) else {
-            return AttributedString(string)
-        }
-        let ns = string as NSString
-        let matches = detector.matches(in: string, options: [], range: NSRange(location: 0, length: ns.length))
-        guard !matches.isEmpty else { return AttributedString(string) }
-
-        var result = AttributedString()
-        var cursor = string.startIndex
-        for match in matches {
-            guard let range = Range(match.range, in: string) else { continue }
-            if cursor < range.lowerBound {
-                result += AttributedString(String(string[cursor..<range.lowerBound]))
-            }
-            var part = AttributedString(String(string[range]))
-            if let url = match.url {
-                part.link = url
-            }
-            part.foregroundColor = Color.blue
-            result += part
-            cursor = range.upperBound
-        }
-        if cursor < string.endIndex {
-            result += AttributedString(String(string[cursor...]))
-        }
-        return result
     }
 }

@@ -54,6 +54,7 @@ struct StatusDetailView: View {
             RichTextView(
                 html: fullTextHTML ?? status.rawText,
                 font: .system(size: 17),
+                fontSize: 17,
                 lineSpacing: 5,
                 lineLimit: isExpanded ? nil : 10
             )
@@ -163,7 +164,7 @@ struct CommentRow: View {
                     CountLabel(icon: "hand.thumbsup", count: comment.likeCounts)
                 }
 
-                RichTextView(html: comment.rawHTML, font: .system(size: 15))
+                RichTextView(html: comment.rawHTML, font: .system(size: 15), fontSize: 15)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 12) {
@@ -243,7 +244,7 @@ struct ReplyRow: View {
                 Spacer(minLength: 0)
             }
 
-            RichTextView(html: comment.rawHTML, font: .system(size: 14))
+            RichTextView(html: comment.rawHTML, font: .system(size: 14), fontSize: 14)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(8)

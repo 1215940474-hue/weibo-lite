@@ -1,3 +1,4 @@
+import Photos
 import SwiftUI
 import UIKit
 
@@ -11,11 +12,8 @@ struct ImageViewerPayload: Identifiable {
 enum WeiboImage {
     private static let tokens = ["/large/", "/mw690/", "/bmiddle/", "/thumbnail/", "/thumb150/", "/square/", "/orj360/", "/original/"]
 
-    /// 原图（查看大图用）
     static func original(_ url: URL) -> URL { replaced(url, with: "/original/") }
-    /// 大图（单图预览用）
     static func large(_ url: URL) -> URL { replaced(url, with: "/large/") }
-    /// 九宫格用中等尺寸，省内存、滚动更顺
     static func thumbnail(_ url: URL) -> URL { replaced(url, with: "/mw690/") }
 
     private static func replaced(_ url: URL, with target: String) -> URL {
@@ -28,11 +26,12 @@ enum WeiboImage {
     }
 }
 
-/// 点开图片看大图：左右翻页、双指/双击缩放、单击退出、长按保存到相册。
+/// 全屏看图：淡入缩放出现（不上下跳）、左右翻页、单击退出、双击/双指缩放、长按弹保存确认。
 struct ImageViewer: View {
     let payload: ImageViewerPayload
     @Environment(\.dismiss) private var dismiss
     @State private var index: Int
+    @State private var appeared = false
     @State private var toast: String?
 
     init(payload: ImageViewerPayload) {
@@ -42,13 +41,14 @@ struct ImageViewer: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color.black.ignoresSafeArea()
+            Color.black
+                .ignoresSafeArea()
 
             TabView(selection: $index) {
                 ForEach(Array(payload.urls.enumerated()), id: \.offset) { item in
-                    ZoomableImage(
+                    ViewerPage(
                         url: item.element,
-                        onSingleTap: { dismiss() },
+                        onDismiss: { dismiss() },
                         onSaveResult: { success in
                             showToast(success ? "已保存到相册" : "保存失败，请检查相册权限")
                         }
@@ -57,28 +57,16 @@ struct ImageViewer: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .ignoresSafeArea()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HStack {
-                Text("\(index + 1)/\(payload.urls.count)")
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.85))
-
-                Spacer()
-
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(10)
-                        .background(Color.white.opacity(0.18), in: Circle())
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-
+            topBar
+        }
+        .scaleEffect(appeared ? 1 : 0.94)
+        .opacity(appeared ? 1 : 0)
+        .onAppear {
+            withAnimation(.easeOut(duration: 0.18)) { appeared = true }
+        }
+        .overlay(alignment: .bottom) {
             if let toast = toast {
                 Text(toast)
                     .font(.footnote)
@@ -86,11 +74,31 @@ struct ImageViewer: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
                     .background(Color.black.opacity(0.65), in: Capsule())
-                    .frame(maxHeight: .infinity, alignment: .bottom)
-                    .padding(.bottom, 60)
-                    .transition(.opacity)
+                    .padding(.bottom, 50)
             }
         }
+    }
+
+    private var topBar: some View {
+        HStack {
+            Text(payload.urls.count > 1 ? "\(index + 1)/\(payload.urls.count)" : "1/1")
+                .font(.footnote)
+                .foregroundStyle(.white.opacity(0.85))
+
+            Spacer()
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .padding(10)
+                    .background(Color.white.opacity(0.18), in: Circle())
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
     }
 
     private func showToast(_ text: String) {
@@ -102,127 +110,90 @@ struct ImageViewer: View {
     }
 }
 
-/// 单张可缩放大图
-private struct ZoomableImage: UIViewRepresentable {
+/// 单页大图：加载原图、双指缩放、双击放大、单击退出、长按弹保存/取消。
+private struct ViewerPage: View {
     let url: URL
-    let onSingleTap: () -> Void
+    let onDismiss: () -> Void
     let onSaveResult: (Bool) -> Void
 
-    func makeUIView(context: Context) -> UIScrollView {
-        let scrollView = UIScrollView()
-        scrollView.minimumZoomScale = 1
-        scrollView.maximumZoomScale = 4
-        scrollView.backgroundColor = .black
-        scrollView.showsVerticalScrollIndicator = false
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.delegate = context.coordinator
-        scrollView.contentInsetAdjustmentBehavior = .never
+    @State private var image: UIImage?
+    @State private var scale: CGFloat = 1
+    @State private var lastScale: CGFloat = 1
+    @State private var showSaveDialog = false
 
-        let imageView = UIImageView()
-        imageView.contentMode = .scaleAspectFit
-        imageView.translatesAutoresizingMaskIntoConstraints = false
-        scrollView.addSubview(imageView)
-        NSLayoutConstraint.activate([
-            imageView.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            imageView.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            imageView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            imageView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            imageView.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
-            imageView.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor)
-        ])
-
-        context.coordinator.attach(scrollView: scrollView, imageView: imageView, url: url)
-        return scrollView
-    }
-
-    func updateUIView(_ uiView: UIScrollView, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onSingleTap: onSingleTap, onSaveResult: onSaveResult)
-    }
-
-    final class Coordinator: NSObject, UIScrollViewDelegate {
-        private let onSingleTap: () -> Void
-        private let onSaveResult: (Bool) -> Void
-        private weak var scrollView: UIScrollView?
-        private weak var imageView: UIImageView?
-
-        init(onSingleTap: @escaping () -> Void, onSaveResult: @escaping (Bool) -> Void) {
-            self.onSingleTap = onSingleTap
-            self.onSaveResult = onSaveResult
-        }
-
-        func attach(scrollView: UIScrollView, imageView: UIImageView, url: URL) {
-            self.scrollView = scrollView
-            self.imageView = imageView
-
-            let singleTap = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap))
-            let doubleTap = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
-            doubleTap.numberOfTapsRequired = 2
-            singleTap.require(toFail: doubleTap)
-
-            let longPress = UILongPressGestureRecognizer(target: self, action: #selector(handleLongPress(_:)))
-            longPress.minimumPressDuration = 0.6
-
-            scrollView.addGestureRecognizer(singleTap)
-            scrollView.addGestureRecognizer(doubleTap)
-            scrollView.addGestureRecognizer(longPress)
-
-            loadImage(url: url, into: imageView)
-        }
-
-        private func loadImage(url: URL, into imageView: UIImageView) {
-            let original = WeiboImage.original(url)
-            ImageLoader.shared.load(original) { [weak self] image in
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
                 if let image = image {
-                    imageView.image = image
-                } else {
-                    // 原图拿不到就退回缩略图
-                    ImageLoader.shared.load(url) { [weak self] fallback in
-                        guard let fallback = fallback else {
-                            self?.onSaveResult(false)
-                            return
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .scaleEffect(scale)
+                        .gesture(magnification)
+                        .onTapGesture(count: 2) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                scale = scale > 1 ? 1 : 2.5
+                                lastScale = scale
+                            }
                         }
-                        imageView.image = fallback
+                        .onTapGesture {
+                            onDismiss()
+                        }
+                        .onLongPressGesture(minimumDuration: 0.5) {
+                            showSaveDialog = true
+                        }
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .task(id: url) {
+            let original = WeiboImage.original(url)
+            ImageLoader.shared.load(original) { loaded in
+                if let loaded = loaded {
+                    image = loaded
+                } else {
+                    ImageLoader.shared.load(url) { fallback in
+                        image = fallback
                     }
                 }
             }
         }
-
-        @objc private func handleSingleTap() {
-            onSingleTap()
+        .confirmationDialog("图片", isPresented: $showSaveDialog, titleVisibility: .visible) {
+            Button("保存到相册") { save() }
+            Button("取消", role: .cancel) {}
         }
+    }
 
-        @objc private func handleDoubleTap(_ gesture: UITapGestureRecognizer) {
-            guard let scrollView = scrollView else { return }
-            if scrollView.zoomScale > 1 {
-                scrollView.setZoomScale(1, animated: true)
-            } else {
-                let point = gesture.location(in: imageView)
-                let zoomScale: CGFloat = 2.5
-                let width = scrollView.bounds.width / zoomScale
-                let height = scrollView.bounds.height / zoomScale
-                let rect = CGRect(x: point.x - width / 2, y: point.y - height / 2, width: width, height: height)
-                scrollView.zoom(to: rect, animated: true)
+    private var magnification: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                scale = min(max(lastScale * value, 1), 4)
             }
-        }
+            .onEnded { _ in
+                lastScale = scale
+            }
+    }
 
-        @objc private func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-            guard gesture.state == .began, let image = imageView?.image else { return }
-            UIImageWriteToSavedPhotosAlbum(image, self, #selector(image(_:didFinishSavingWithError:contextInfo:)), nil)
-        }
-
-        @objc private func image(_ image: UIImage, didFinishSavingWithError error: Error?, contextInfo: UnsafeMutableRawPointer?) {
-            onSaveResult(error == nil)
-        }
-
-        func viewForZooming(in scrollView: UIScrollView) -> UIView? {
-            imageView
+    private func save() {
+        guard let image = image else { return }
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else {
+                DispatchQueue.main.async { onSaveResult(false) }
+                return
+            }
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            } completionHandler: { success, _ in
+                DispatchQueue.main.async { onSaveResult(success) }
+            }
         }
     }
 }
 
-/// 自带大图查看能力的图片九宫格，卡片里直接用它。
+/// 自带大图查看能力的图片九宫格。
 struct TappableImageGrid: View {
     let pics: [WBPic]
     @State private var viewer: ImageViewerPayload?
@@ -231,7 +202,13 @@ struct TappableImageGrid: View {
         ImageGrid(pics: pics) { index in
             let urls = pics.compactMap { $0.url }
             guard !urls.isEmpty else { return }
-            viewer = ImageViewerPayload(urls: urls, startIndex: min(index, urls.count - 1))
+            let payload = ImageViewerPayload(urls: urls, startIndex: min(index, urls.count - 1))
+            // 关掉系统默认的上下滑入动画，改用查看器内部的淡入缩放
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                viewer = payload
+            }
         }
         .fullScreenCover(item: $viewer) { payload in
             ImageViewer(payload: payload)

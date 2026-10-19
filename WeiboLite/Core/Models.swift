@@ -20,8 +20,8 @@ struct ContainerData: Decodable {
     let sinceID: Int64
     let maxID: Int64
     let userInfo: WBUser?
-    /// cardlistInfo.since_id：搜索/推荐翻页真正要传的游标
-    let cursor: Int64
+    /// cardlistInfo.since_id：推荐翻页游标（原样字符串传回）
+    let cursor: String
 
     private enum CodingKeys: String, CodingKey {
         case cards
@@ -32,11 +32,11 @@ struct ContainerData: Decodable {
     }
 
     private struct CardlistInfo: Decodable {
-        let sinceID: Int64
+        let sinceID: String
         private enum CodingKeys: String, CodingKey { case sinceID = "since_id" }
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            sinceID = Int64(container.soft(FlexID.self, .sinceID)?.value ?? "") ?? 0
+            sinceID = container.soft(FlexID.self, .sinceID)?.value ?? ""
         }
     }
 
@@ -46,7 +46,7 @@ struct ContainerData: Decodable {
         sinceID = Int64(container.soft(FlexID.self, .sinceID)?.value ?? "") ?? 0
         maxID = Int64(container.soft(FlexID.self, .maxID)?.value ?? "") ?? 0
         userInfo = container.soft(WBUser.self, .userInfo)
-        cursor = container.soft(CardlistInfo.self, .cardlistInfo)?.sinceID ?? 0
+        cursor = container.soft(CardlistInfo.self, .cardlistInfo)?.sinceID ?? ""
     }
 
     /// 只保留真正的微博卡片（card_type == 9），其余（广告位、话题、分组头）全部丢掉。

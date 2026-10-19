@@ -110,10 +110,10 @@ enum WeiboEndpoint {
         return build(path: "/feed/friends", items: items)
     }
 
-    static func container(id: String, page: Int = 1, sinceID: Int64 = 0, pageType: String? = nil) -> URL? {
+    static func container(id: String, page: Int = 1, sinceID: String? = nil, pageType: String? = nil) -> URL? {
         var items: [URLQueryItem] = [URLQueryItem(name: "containerid", value: id)]
-        if sinceID > 0 {
-            items.append(URLQueryItem(name: "since_id", value: String(sinceID)))
+        if let sinceID = sinceID, !sinceID.isEmpty {
+            items.append(URLQueryItem(name: "since_id", value: sinceID))
         }
         if page > 1 {
             items.append(URLQueryItem(name: "page", value: String(page)))

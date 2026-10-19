@@ -31,24 +31,25 @@ final class ImageLoader {
         }.resume()
     }
 
-    /// 表情图：加载并缩放到和正文文字等高
+    /// 表情图：加载并缩放到和正文文字一样高（size 用点，避免二次乘 scale 变大）
     func loadEmoji(_ url: URL, pointHeight: CGFloat = 19, completion: @escaping (UIImage?) -> Void) {
         load(url) { image in
             guard let image = image else {
                 completion(nil)
                 return
             }
-            let scale = UIScreen.main.scale
-            let target = CGSize(width: pointHeight * scale, height: pointHeight * scale)
-            let renderer = UIGraphicsImageRenderer(size: target)
+            let size = CGSize(width: pointHeight, height: pointHeight)
+            let format = UIGraphicsImageRendererFormat.default()
+            format.scale = UIScreen.main.scale
+            let renderer = UIGraphicsImageRenderer(size: size, format: format)
             let resized = renderer.image { _ in
-                let ratio = min(target.width / image.size.width, target.height / image.size.height)
-                let size = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
+                let ratio = min(size.width / image.size.width, size.height / image.size.height)
+                let drawSize = CGSize(width: image.size.width * ratio, height: image.size.height * ratio)
                 image.draw(in: CGRect(
-                    x: (target.width - size.width) / 2,
-                    y: (target.height - size.height) / 2,
-                    width: size.width,
-                    height: size.height
+                    x: (size.width - drawSize.width) / 2,
+                    y: (size.height - drawSize.height) / 2,
+                    width: drawSize.width,
+                    height: drawSize.height
                 ))
             }
             completion(resized)

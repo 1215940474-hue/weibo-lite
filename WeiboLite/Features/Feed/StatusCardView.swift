@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 单条微博卡片。
+/// 单条微博卡片：点击卡片任意非交互区域进入详情；图片/视频/全文按钮各自独立可点。
 struct StatusCardView: View {
     let status: MBlog
 
@@ -11,8 +11,33 @@ struct StatusCardView: View {
     var body: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: 10) {
-                header
-                textSection
+                // 头部 + 正文 → 点击进详情（正文里的链接不抢点击，进详情后可点）
+                NavigationLink(value: status.navKey) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        header
+                        textSection
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                // 全文按钮放在链接外面，保证可点
+                if shouldShowFullButton && !isExpanded {
+                    Button {
+                        loadFullText()
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("全文")
+                            if isLoadingFullText {
+                                ProgressView().controlSize(.mini)
+                            }
+                        }
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.blue)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 if !status.videoURL.isEmpty, let videoURL = URL(string: status.videoURL) {
                     WeiboVideoPlayer(url: videoURL)
@@ -32,64 +57,44 @@ struct StatusCardView: View {
     }
 
     private var header: some View {
-        NavigationLink(value: status.navKey) {
-            HStack(alignment: .center, spacing: 10) {
-                AvatarView(url: status.user?.avatarURL, size: 38)
+        HStack(alignment: .center, spacing: 10) {
+            AvatarView(url: status.user?.avatarURL, size: 38)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
-                        Text(status.user?.screenName ?? "微博用户")
-                            .font(.system(size: 15, weight: .semibold))
-                            .lineLimit(1)
-                        if status.user?.verified == true {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption2)
-                                .foregroundStyle(.orange)
-                        }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Text(status.user?.screenName ?? "微博用户")
+                        .font(.system(size: 15, weight: .semibold))
+                        .lineLimit(1)
+                    if status.user?.verified == true {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
                     }
-                    HStack(spacing: 6) {
-                        Text(status.displayTime)
-                        if !status.source.isEmpty {
-                            Text("来自 \(status.source)")
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
                 }
-
-                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    Text(status.displayTime)
+                    if !status.source.isEmpty {
+                        Text("来自 \(status.source)")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
-            .contentShape(Rectangle())
+
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
     }
 
     private var textSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            RichTextView(
-                html: fullTextHTML ?? status.rawText,
-                font: .system(size: 16),
-                lineSpacing: 4,
-                lineLimit: isExpanded ? nil : 6
-            )
-
-            if shouldShowFullButton && !isExpanded {
-                Button {
-                    loadFullText()
-                } label: {
-                    HStack(spacing: 3) {
-                        Text("全文")
-                        if isLoadingFullText {
-                            ProgressView().controlSize(.mini)
-                        }
-                    }
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.blue)
-                }
-                .buttonStyle(.plain)
-            }
-        }
+        RichTextView(
+            html: fullTextHTML ?? status.rawText,
+            font: .system(size: 16),
+            fontSize: 16,
+            lineSpacing: 4,
+            lineLimit: isExpanded ? nil : 6,
+            interactiveLinks: false
+        )
     }
 
     private var shouldShowFullButton: Bool {
@@ -145,8 +150,10 @@ struct RepostView: View {
                 RichTextView(
                     html: status.rawText,
                     font: .system(size: 15),
+                    fontSize: 15,
                     lineSpacing: 3,
-                    lineLimit: 8
+                    lineLimit: 8,
+                    interactiveLinks: false
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -168,7 +175,7 @@ struct RepostView: View {
     }
 }
 
-/// 配图：单图按真实比例（长图可长）；多图正方形九宫格，最多 9 张，超出显示 +N。
+/// 配图：单图按真实比例；多图正方形九宫格，最多 9 张，超出显示 +N。
 struct ImageGrid: View {
     let pics: [WBPic]
     var onTap: ((Int) -> Void)? = nil
@@ -203,7 +210,6 @@ struct ImageGrid: View {
     }
 }
 
-/// 正方形图片格（不管原图长宽比都裁成 1:1，不会撑破边距）
 private struct SquareImageCell: View {
     let url: URL
     var overlayText: String?

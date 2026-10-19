@@ -55,6 +55,7 @@ struct FeedView: View {
 /// 信息流列表（推荐 / 关注 / 搜索结果 / 用户主页共用）。
 struct FeedList: View {
     @ObservedObject var store: FeedStore
+    var showsTopFade: Bool = true
 
     var body: some View {
         ScrollView {
@@ -90,7 +91,9 @@ struct FeedList: View {
             }
         }
         .overlay(alignment: .top) {
-            TopBlurFade()
+            if showsTopFade {
+                TopBlurFade()
+            }
         }
         .task {
             if store.items.isEmpty { await store.reload() }

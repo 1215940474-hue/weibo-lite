@@ -72,9 +72,10 @@ struct SearchView: View {
     }
 }
 
-/// 搜索结果页（热搜点击 / 搜索跳转用）
+/// 搜索结果页（热搜点击 / 搜索跳转用）：自定义顶栏，避免系统导航栏下面的那条横线。
 struct SearchResultView: View {
     let keyword: String
+    @Environment(\.dismiss) private var dismiss
 
     @StateObject private var store: FeedStore
 
@@ -84,8 +85,32 @@ struct SearchResultView: View {
     }
 
     var body: some View {
-        FeedList(store: store)
-            .navigationTitle(keyword)
-            .navigationBarTitleDisplayMode(.inline)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .frame(width: 34, height: 34)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Text(keyword)
+                    .font(.headline)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color(uiColor: .systemBackground))
+
+            FeedList(store: store, showsTopFade: false)
+        }
+        .background(AppBackground())
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
