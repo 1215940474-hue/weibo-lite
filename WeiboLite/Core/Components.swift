@@ -1,0 +1,67 @@
+import Foundation
+import SwiftUI
+
+struct AvatarView: View {
+    let url: URL?
+    let size: CGFloat
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().scaledToFill()
+            default:
+                Color(uiColor: .tertiarySystemFill)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(Color.primary.opacity(0.06), lineWidth: 1))
+    }
+}
+
+struct CountLabel: View {
+    let icon: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+            if count > 0 {
+                Text(formatted)
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
+
+    private var formatted: String {
+        if count >= 10_000 {
+            return String(format: "%.1f万", Double(count) / 10_000)
+        }
+        return String(count)
+    }
+}
+
+struct ErrorStateView: View {
+    let message: String
+    let retry: () -> Void
+
+    var body: some View {
+        GlassCard {
+            VStack(spacing: 10) {
+                Image(systemName: "exclamationmark.bubble")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                Text(message)
+                    .font(.footnote)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                Button("重试", action: retry)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+}

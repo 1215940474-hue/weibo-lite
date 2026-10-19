@@ -1,0 +1,79 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build WeiboLite (unsigned IPA)
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          echo "Installed Xcodes:"
+          ls -d /Applications/Xcode*.app || true
+          LATEST=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$LATEST" ]; then
+            echo "Selecting $LATEST"
+            sudo xcode-select -s "$LATEST/Contents/Developer"
+          fi
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i iphoneos || true
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+          xcodegen --version
+
+      - name: Generate Xcode project
+        run: |
+          xcodegen generate
+          ls -la
+
+      - name: Archive (no signing)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project WeiboLite.xcodeproj \
+            -scheme WeiboLite \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/WeiboLite.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive
+
+      - name: Package unsigned IPA
+        run: |
+          set -e
+          APP=$(find build/WeiboLite.xcarchive/Products/Applications -maxdepth 1 -name "*.app" | head -n 1)
+          echo "App bundle: $APP"
+          rm -rf build/Payload build/out
+          mkdir -p build/Payload build/out
+          cp -R "$APP" build/Payload/
+          cd build/Payload
+          zip -qry ../out/WeiboLite-unsigned.ipa Payload
+          cd ../..
+          ls -lh build/out
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeiboLite-unsigned-ipa
+          path: build/out/WeiboLite-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30

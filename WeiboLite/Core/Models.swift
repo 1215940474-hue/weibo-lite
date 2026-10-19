@@ -1,0 +1,287 @@
+import Foundation
+
+// MARK: - 容器接口 /api/container/getIndex
+
+struct ContainerResponse: Decodable {
+    let ok: Int
+    let data: ContainerData?
+
+    private enum CodingKeys: String, CodingKey { case ok, data }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        data = container.soft(ContainerData.self, .data)
+    }
+}
+
+struct ContainerData: Decodable {
+    let cards: [Card]
+    let sinceID: Int64
+    let maxID: Int64
+
+    private enum CodingKeys: String, CodingKey {
+        case cards
+        case sinceID = "since_id"
+        case maxID = "max_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cards = container.soft([Card].self, .cards) ?? []
+        sinceID = container.soft(FlexID.self, .sinceID)?.value.flatMap { Int64($0) } ?? 0
+        maxID = container.soft(FlexID.self, .maxID)?.value.flatMap { Int64($0) } ?? 0
+    }
+
+    /// 只保留真正的微博卡片（card_type == 9），其余（广告位、话题、分组头）全部丢掉。
+    var statusCards: [MBlog] {
+        cards
+            .filter { $0.cardType == 9 }
+            .flatMap { $0.allBlogs }
+            .filter { !$0.isAd }
+    }
+}
+
+struct Card: Decodable {
+    let cardType: Int
+    let mblog: MBlog?
+    let cardGroup: [Card]
+
+    private enum CodingKeys: String, CodingKey {
+        case cardType = "card_type"
+        case mblog
+        case cardGroup = "card_group"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cardType = container.soft(FlexInt.self, .cardType)?.value ?? 0
+        mblog = container.soft(MBlog.self, .mblog)
+        cardGroup = container.soft([Card].self, .cardGroup) ?? []
+    }
+
+    var allBlogs: [MBlog] {
+        var result: [MBlog] = []
+        if cardType == 9, let mblog = mblog { result.append(mblog) }
+        for group in cardGroup { result.append(contentsOf: group.allBlogs) }
+        return result
+    }
+}
+
+// MARK: - 单条微博
+
+final class MBlog: Decodable, Identifiable {
+    let statusID: String
+    let mid: String
+    let rawText: String
+    let createdAt: String
+    let source: String
+    let user: WBUser?
+    let pics: [WBPic]
+    let retweeted: MBlog?
+    let commentsCount: Int
+    let repostsCount: Int
+    let attitudesCount: Int
+    let isLongText: Bool
+    let isAd: Bool
+
+    var id: String { statusID.isEmpty ? mid : statusID }
+    /// 用于导航/请求详情的 id（m.weibo.cn 用 mid）
+    var navKey: String { mid.isEmpty ? id : mid }
+    var plainText: String { HTMLText.plain(rawText) }
+
+    private enum CodingKeys: String, CodingKey {
+        case statusID = "id"
+        case mid
+        case rawText = "text"
+        case createdAt = "created_at"
+        case source
+        case user
+        case pics
+        case retweeted = "retweeted_status"
+        case commentsCount = "comments_count"
+        case repostsCount = "reposts_count"
+        case attitudesCount = "attitudes_count"
+        case isLongText
+        case isAd = "is_ad"
+        case promotion
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        statusID = container.soft(FlexID.self, .statusID)?.value ?? ""
+        mid = container.soft(FlexID.self, .mid)?.value ?? ""
+        rawText = container.soft(String.self, .rawText) ?? ""
+        createdAt = container.soft(String.self, .createdAt) ?? ""
+        source = HTMLText.plain(container.soft(String.self, .source) ?? "")
+        user = container.soft(WBUser.self, .user)
+        pics = container.soft([WBPic].self, .pics) ?? []
+        retweeted = container.soft(MBlog.self, .retweeted)
+        commentsCount = container.soft(FlexInt.self, .commentsCount)?.value ?? 0
+        repostsCount = container.soft(FlexInt.self, .repostsCount)?.value ?? 0
+        attitudesCount = container.soft(FlexInt.self, .attitudesCount)?.value ?? 0
+        isLongText = container.soft(Bool.self, .isLongText) ?? false
+
+        let hasPromotion = (container.soft(AnyJSON.self, .promotion)) != nil
+        let adFlag = (container.soft(FlexInt.self, .isAd)?.value ?? 0) == 1
+        isAd = hasPromotion || adFlag
+    }
+}
+
+// MARK: - 用户
+
+struct WBUser: Decodable, Hashable {
+    let uid: String
+    let screenName: String
+    let avatarURL: URL?
+    let verified: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case uid = "id"
+        case screenName = "screen_name"
+        case avatarLarge = "avatar_large"
+        case avatar = "profile_image_url"
+        case verified
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        uid = container.soft(FlexID.self, .uid)?.value ?? ""
+        screenName = container.soft(String.self, .screenName) ?? "微博用户"
+        let rawAvatar = container.soft(String.self, .avatarLarge)
+            ?? container.soft(String.self, .avatar)
+            ?? ""
+        avatarURL = URL(string: rawAvatar.replacingOccurrences(of: "http://", with: "https://"))
+        verified = container.soft(Bool.self, .verified) ?? false
+    }
+}
+
+// MARK: - 配图
+
+struct WBPic: Decodable, Hashable {
+    let largeURL: String
+    let fallbackURL: String
+
+    var url: URL? {
+        let raw = largeURL.isEmpty ? fallbackURL : largeURL
+        return URL(string: raw.replacingOccurrences(of: "http://", with: "https://"))
+    }
+
+    private enum CodingKeys: String, CodingKey { case large, url }
+    private struct PicURL: Decodable {
+        let url: String
+        private enum CodingKeys: String, CodingKey { case url }
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            url = container.soft(String.self, .url) ?? ""
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        largeURL = container.soft(PicURL.self, .large)?.url ?? ""
+        fallbackURL = container.soft(String.self, .url) ?? ""
+    }
+}
+
+// MARK: - 详情 /api/statuses/show
+
+struct StatusShowResponse: Decodable {
+    let ok: Int
+    let data: MBlog?
+
+    private enum CodingKeys: String, CodingKey { case ok, data }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        data = container.soft(MBlog.self, .data)
+    }
+}
+
+// MARK: - 评论 /api/comments/hotflow
+
+struct CommentsResponse: Decodable {
+    let ok: Int
+    let data: CommentData?
+
+    private enum CodingKeys: String, CodingKey { case ok, data }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        data = container.soft(CommentData.self, .data)
+    }
+}
+
+struct CommentData: Decodable {
+    let comments: [WBComment]
+    let maxID: String
+
+    private enum CodingKeys: String, CodingKey {
+        case comments = "data"
+        case maxID = "max_id"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        comments = container.soft([WBComment].self, .comments) ?? []
+        maxID = container.soft(FlexID.self, .maxID)?.value ?? ""
+    }
+}
+
+struct WBComment: Decodable, Identifiable {
+    let cid: String
+    let text: String
+    let createdAt: String
+    let likeCounts: Int
+    let user: WBUser?
+
+    var id: String { cid }
+    var plainText: String { HTMLText.plain(text) }
+
+    private enum CodingKeys: String, CodingKey {
+        case cid = "id"
+        case text
+        case createdAt = "created_at"
+        case likeCounts = "like_counts"
+        case user
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        cid = container.soft(FlexID.self, .cid)?.value ?? UUID().uuidString
+        text = container.soft(String.self, .text) ?? ""
+        createdAt = container.soft(String.self, .createdAt) ?? ""
+        likeCounts = container.soft(FlexInt.self, .likeCounts)?.value ?? 0
+        user = container.soft(WBUser.self, .user)
+    }
+}
+
+// MARK: - 登录态 /api/config
+
+struct ConfigResponse: Decodable {
+    let ok: Int
+    let data: ConfigData?
+
+    private enum CodingKeys: String, CodingKey { case ok, data }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        ok = container.soft(FlexInt.self, .ok)?.value ?? 0
+        data = container.soft(ConfigData.self, .data)
+    }
+}
+
+struct ConfigData: Decodable {
+    let uid: String
+    let user: WBUser?
+
+    private enum CodingKeys: String, CodingKey { case uid, user }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        uid = container.soft(FlexID.self, .uid)?.value ?? ""
+        user = container.soft(WBUser.self, .user)
+    }
+}
