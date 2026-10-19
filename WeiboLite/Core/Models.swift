@@ -29,8 +29,8 @@ struct ContainerData: Decodable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         cards = container.soft([Card].self, .cards) ?? []
-        sinceID = container.soft(FlexID.self, .sinceID)?.value.flatMap { Int64($0) } ?? 0
-        maxID = container.soft(FlexID.self, .maxID)?.value.flatMap { Int64($0) } ?? 0
+        sinceID = Int64(container.soft(FlexID.self, .sinceID)?.value ?? "") ?? 0
+        maxID = Int64(container.soft(FlexID.self, .maxID)?.value ?? "") ?? 0
     }
 
     /// 只保留真正的微博卡片（card_type == 9），其余（广告位、话题、分组头）全部丢掉。

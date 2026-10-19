@@ -41,7 +41,7 @@ extension View {
     ///
     /// 并把 project.yml 里的 deploymentTarget 改成 "26.0"。
     @ViewBuilder
-    func glassSurface<S: Shape>(_ shape: S) -> some View {
+    func glassSurface<S: InsettableShape>(_ shape: S) -> some View {
         self
             .background(.ultraThinMaterial, in: shape)
             .overlay(shape.strokeBorder(Color.white.opacity(0.10), lineWidth: 0.8))
