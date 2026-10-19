@@ -34,11 +34,6 @@ struct UserProfileView: View {
 
                     ForEach(store.items) { status in
                         StatusCardView(status: status)
-                            .onAppear {
-                                if status.navKey == store.items.last?.navKey, store.canLoadMore {
-                                    Task { await store.loadMore() }
-                                }
-                            }
                     }
 
                     if store.isLoadingMore {
@@ -52,6 +47,15 @@ struct UserProfileView: View {
             .refreshable {
                 await loadProfile()
                 await store.reload()
+            }
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                let scrollable = geometry.contentSize.height > geometry.containerSize.height + 40
+                let nearBottom = geometry.contentOffset.y + geometry.containerSize.height
+                    > geometry.contentSize.height - 600
+                return scrollable && nearBottom
+            } action: { _, isNearBottom in
+                guard isNearBottom else { return }
+                Task { await store.loadMore() }
             }
         }
         .background(AppBackground())

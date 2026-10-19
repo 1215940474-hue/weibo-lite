@@ -25,17 +25,32 @@ enum RichHTML {
         var links: [(label: String, url: URL?)] = []
 
         // 1) 把 <a> 换成占位符，避免链接文字被当普通文本
+        //    注意：这里必须先把链接按原索引填进定长数组，再倒序替换字符串，
+        //    不能用 insert(at:)——空数组插入高位索引会直接触发 Array 越界陷阱。
         if let regex = anchorRegex {
             let ns = working as NSString
             let matches = regex.matches(in: working, options: [], range: NSRange(location: 0, length: ns.length))
-            let result = NSMutableString(string: working)
-            for (index, match) in matches.enumerated().reversed() where match.numberOfRanges > 2 {
-                let href = ns.substring(with: match.range(at: 1))
-                let inner = ns.substring(with: match.range(at: 2))
-                links.insert((label: linkLabel(inner: inner), url: normalURL(href)), at: index)
-                result.replaceCharacters(in: match.range, with: "\u{1}\(index)\u{1}")
+            if !matches.isEmpty {
+                var table: [(label: String, url: URL?)] = Array(
+                    repeating: (label: "", url: nil),
+                    count: matches.count
+                )
+                var replacements: [(range: NSRange, token: String)] = []
+
+                for (index, match) in matches.enumerated() where match.numberOfRanges > 2 {
+                    let href = ns.substring(with: match.range(at: 1))
+                    let inner = ns.substring(with: match.range(at: 2))
+                    table[index] = (label: linkLabel(inner: inner), url: normalURL(href))
+                    replacements.append((range: match.range, token: "\u{1}\(index)\u{1}"))
+                }
+
+                let result = NSMutableString(string: working)
+                for item in replacements.reversed() {
+                    result.replaceCharacters(in: item.range, with: item.token)
+                }
+                working = result as String
+                links = table
             }
-            working = result as String
         }
 
         // 2) 按 <img> 切分，图片之间/前后的文字再按占位符切出链接
@@ -79,7 +94,10 @@ enum RichHTML {
                 appendText(&segments, before)
             }
             guard match.numberOfRanges > 1 else { continue }
-            if let index = Int(ns.substring(with: match.range(at: 1))), index >= 0, index < links.count {
+            if let index = Int(ns.substring(with: match.range(at: 1))),
+               index >= 0,
+               index < links.count,
+               !links[index].label.isEmpty {
                 segments.append(.link(label: links[index].label, url: links[index].url))
             }
             last = match.range.location + match.range.length

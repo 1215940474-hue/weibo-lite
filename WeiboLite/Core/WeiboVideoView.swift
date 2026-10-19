@@ -115,6 +115,7 @@ struct WeiboVideoPlayer: View {
         player = newPlayer
         VideoRegistry.activate(newPlayer)
         CrashTrace.log("video setup \(url.absoluteString.prefix(100))")
+        newPlayer.play()
 
         Task {
             if let track = try? await item.asset.loadTracks(withMediaType: .video).first,

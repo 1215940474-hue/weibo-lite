@@ -48,7 +48,7 @@ jobs:
           xcodebuild \
             -project WeiboLite.xcodeproj \
             -scheme WeiboLite \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -archivePath build/WeiboLite.xcarchive \
@@ -57,7 +57,7 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             STRIP_INSTALLED_PRODUCT=NO \
             COPY_PHASE_STRIP=NO \
-            DEBUG_INFORMATION_FORMAT=dwarf \
+            DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
             archive
 
       - name: Package unsigned IPA

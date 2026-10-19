@@ -22,8 +22,8 @@ targets:
       path: Support/Info.plist
       properties:
         CFBundleDisplayName: 微博轻读
-        CFBundleShortVersionString: "0.6.1"
-        CFBundleVersion: "7"
+        CFBundleShortVersionString: "0.6.2"
+        CFBundleVersion: "8"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
