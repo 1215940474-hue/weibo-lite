@@ -65,9 +65,9 @@ jobs:
           rm -rf build/Payload build/out
           mkdir -p build/Payload build/out
           cp -R "$APP" build/Payload/
-          cd build/Payload
-          zip -qry ../out/WeiboLite-unsigned.ipa Payload
-          cd ../..
+          cd build
+          zip -qry out/WeiboLite-unsigned.ipa Payload
+          cd ..
           ls -lh build/out
 
       - name: Upload artifact
