@@ -93,6 +93,7 @@ struct FeedList: View {
 
                 ForEach(store.items) { status in
                     StatusCardView(status: status)
+                        .equatable()
                 }
 
                 if store.isLoadingMore {

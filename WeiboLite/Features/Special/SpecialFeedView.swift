@@ -6,34 +6,18 @@ extension Notification.Name {
     static let specialFeedRefreshRequested = Notification.Name("weibolite.specialFeedRefresh")
 }
 
-/// 「特别关注」分组：把名单里每个人的微博按时间合并
+/// 「特别关注」分组：读取微博账号自己的特别关注分组
 struct SpecialFeedView: View {
     @StateObject private var store = SpecialFeedStore()
-    @ObservedObject private var specials = SpecialFollowStore.shared
 
     var body: some View {
-        Group {
-            if specials.users.isEmpty {
-                emptyState
-            } else {
-                list
-            }
-        }
-        .onAppear {
-            Task { await store.reload() }
-        }
-        .onChange(of: specials.users) { _, _ in
-            Task { await store.reload() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .specialFeedRefreshRequested)) { _ in
-            Task { await store.reload() }
-        }
-    }
-
-    private var list: some View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 header
+
+                if store.isLoading, store.items.isEmpty {
+                    ProgressView().padding(.top, 40)
+                }
 
                 if let message = store.errorMessage, store.items.isEmpty {
                     ErrorStateView(message: message) {
@@ -43,6 +27,7 @@ struct SpecialFeedView: View {
 
                 ForEach(store.items) { status in
                     StatusCardView(status: status)
+                        .equatable()
                 }
 
                 if store.isLoadingMore {
@@ -64,6 +49,12 @@ struct SpecialFeedView: View {
             guard isNearBottom else { return }
             Task { await store.loadMore() }
         }
+        .task {
+            if store.items.isEmpty { await store.reload() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .specialFeedRefreshRequested)) { _ in
+            Task { await store.reload() }
+        }
     }
 
     private var header: some View {
@@ -71,35 +62,12 @@ struct SpecialFeedView: View {
             Image(systemName: "star.fill")
                 .font(.caption)
                 .foregroundStyle(.yellow)
-            Text("特别关注 · \(specials.users.count)")
+            Text("微博「特别关注」")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             Spacer()
-            Text("按时间合并")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
-    }
-
-    private var emptyState: some View {
-        ScrollView {
-            VStack(spacing: 12) {
-                Image(systemName: "star")
-                    .font(.system(size: 34))
-                    .foregroundStyle(.secondary)
-                Text("还没有特别关注的人")
-                    .font(.headline)
-                Text("进入任意博主的主页，点右上角 ★ 加入特别关注，\n他们的微博会按时间合并出现在这里。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 120)
-            .padding(.horizontal, 32)
-        }
-        .refreshable { await store.reload() }
     }
 }

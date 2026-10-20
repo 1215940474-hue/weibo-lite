@@ -102,7 +102,12 @@ struct WeiboVideoPlayer: View {
     }
 
     private func setupIfNeeded() {
-        guard player == nil else { return }
+        if let existing = player {
+            // 从其它页面/图片查看器回来后，重新接管播放
+            VideoRegistry.activate(existing)
+            existing.play()
+            return
+        }
 
         let session = AVAudioSession.sharedInstance()
         try? session.setCategory(.ambient, mode: .moviePlayback, options: [.mixWithOthers])

@@ -11,7 +11,8 @@ final class MediaPresenter: ObservableObject {
         imagePayload = payload
     }
 
-    func closeImage() {
+    func closeImage(ifMatches id: UUID) {
+        guard imagePayload?.id == id else { return }
         imagePayload = nil
     }
 

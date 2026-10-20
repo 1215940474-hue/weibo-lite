@@ -210,6 +210,12 @@ struct RepostView: View {
     }
 }
 
+extension StatusCardView: Equatable {
+    static func == (lhs: StatusCardView, rhs: StatusCardView) -> Bool {
+        lhs.status === rhs.status || lhs.status.navKey == rhs.status.navKey
+    }
+}
+
 /// 配图：单图按真实比例；多图正方形九宫格，最多 9 张，超出显示 +N。
 struct ImageGrid: View {
     let pics: [WBPic]

@@ -54,7 +54,8 @@ struct RootView: View {
 
             // 图片查看器：自绘覆盖层 + 缩放淡入，而不是系统的上下滑入
             if let payload = media.imagePayload {
-                ImageViewer(payload: payload, onClose: { media.closeImage() })
+                ImageViewer(payload: payload, onClose: { media.closeImage(ifMatches: payload.id) })
+                    .id(payload.id)
                     .transition(.opacity.combined(with: .scale(scale: 0.94)))
                     .zIndex(20)
             }

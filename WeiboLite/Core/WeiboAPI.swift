@@ -92,6 +92,14 @@ enum WeiboEndpoint {
     static func userTimelineContainer(uid: String) -> String { "107603\(uid)" }
     /// 搜索微博
     static func searchContainer(keyword: String) -> String { "100103type=1&q=\(keyword)" }
+    /// 微博「特别关注」分组的候选容器 id（关注分组 id 不稳定，运行时逐个探测）
+    static let closeFriendCandidates = [
+        "102803_ctg1_1900_-_ctg1_1900_home",
+        "102803_ctg1_1901_-_ctg1_1901_home",
+        "102803_ctg1_1910_-_ctg1_1910_home",
+        "102803_ctg1_2000_-_ctg1_2000_home"
+    ]
+
     /// 推荐流（不按时间排序，官方推荐算法）
     static let recommendContainer = "102803"
     /// 热搜榜

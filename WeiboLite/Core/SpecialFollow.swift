@@ -1,65 +1,10 @@
 import Combine
 import Foundation
 
-struct SpecialUser: Codable, Identifiable, Hashable {
-    let uid: String
-    let name: String
-    let avatar: String
-
-    var id: String { uid }
-}
-
-/// 「特别关注」名单：本地持久化，用户在博主主页点星标加入
-@MainActor
-final class SpecialFollowStore: ObservableObject {
-    static let shared = SpecialFollowStore()
-
-    @Published private(set) var users: [SpecialUser] = []
-
-    private let key = "weibolite.special.users.v1"
-
-    private init() {
-        load()
-    }
-
-    func isSpecial(_ uid: String) -> Bool {
-        users.contains { $0.uid == uid }
-    }
-
-    func toggle(uid: String, name: String, avatar: URL?) {
-        guard !uid.isEmpty else { return }
-        if let index = users.firstIndex(where: { $0.uid == uid }) {
-            users.remove(at: index)
-        } else {
-            users.append(
-                SpecialUser(uid: uid, name: name, avatar: avatar?.absoluteString ?? "")
-            )
-        }
-        save()
-        CrashTrace.log("special follow toggled, count=\(users.count)")
-    }
-
-    func remove(uid: String) {
-        users.removeAll { $0.uid == uid }
-        save()
-    }
-
-    private func save() {
-        if let data = try? JSONEncoder().encode(users) {
-            UserDefaults.standard.set(data, forKey: key)
-        }
-    }
-
-    private func load() {
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let decoded = try? JSONDecoder().decode([SpecialUser].self, from: data) else {
-            return
-        }
-        users = decoded
-    }
-}
-
-/// 特别关注流：把名单里每个人的主页微博拉下来，按时间合并、去重
+/// 「特别关注」流：直接读微博自己的特别关注分组（不是你在这个 App 里加的名单）。
+///
+/// 微博移动端的关注分组没有稳定公开的 id，这里按候选容器逐个探测：
+/// 只要某个容器返回 `ok == 1` 就认为找到了，再用 `since_id` 游标翻页。
 @MainActor
 final class SpecialFeedStore: ObservableObject {
     @Published private(set) var items: [MBlog] = []
@@ -68,89 +13,80 @@ final class SpecialFeedStore: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var canLoadMore = true
 
-    private var pages: [String: Int] = [:]
+    /// 已确认可用的容器 id
+    private var containerID: String?
+    private var cursor: String = ""
+    private var seen: Set<String> = []
     private var emptyLoadCount = 0
 
     func reload() async {
         guard !isLoading else { return }
-        let users = SpecialFollowStore.shared.users
-        guard !users.isEmpty else {
-            items = []
-            errorMessage = "还没有特别关注的人。去任意博主主页点 ★ 加入。"
-            return
-        }
-
         isLoading = true
         errorMessage = nil
-        pages = [:]
+        containerID = nil
+        cursor = ""
+        seen = []
         emptyLoadCount = 0
         canLoadMore = true
         defer { isLoading = false }
 
-        var merged: [MBlog] = []
-        for user in users {
-            if let blogs = try? await fetch(uid: user.uid, page: 1) {
-                merged.append(contentsOf: blogs)
-                pages[user.uid] = 1
+        guard WeiboSession.shared.isLoggedIn else {
+            errorMessage = "请先登录微博，才能读取「特别关注」。"
+            return
+        }
+
+        for candidate in WeiboEndpoint.closeFriendCandidates {
+            guard let url = WeiboEndpoint.container(id: candidate) else { continue }
+            guard let response: ContainerResponse = try? await WeiboAPI.shared.get(url) else {
+                continue
             }
+            guard response.ok == 1, let data = response.data else { continue }
+
+            containerID = candidate
+            cursor = data.cursor
+            let blogs = data.statusCards
+            seen = Set(blogs.map { $0.navKey })
+            items = blogs
+            if blogs.isEmpty {
+                errorMessage = "微博「特别关注」里暂时没有内容（也可能分组为空）。"
+            }
+            CrashTrace.log("special feed container=\(candidate) count=\(blogs.count)")
+            return
         }
-        items = Self.sorted(merged)
-        if items.isEmpty {
-            errorMessage = "特别关注的人暂时没有新微博。"
-        }
+
+        errorMessage = "暂时读不到微博的「特别关注」分组，接口可能已调整。"
     }
 
     func loadMore() async {
-        guard !isLoading, !isLoadingMore, canLoadMore else { return }
-        let users = SpecialFollowStore.shared.users
-        guard !users.isEmpty else { return }
-
+        guard let id = containerID, !isLoading, !isLoadingMore, canLoadMore else { return }
         isLoadingMore = true
         defer { isLoadingMore = false }
 
-        var added: [MBlog] = []
-        for user in users {
-            let next = (pages[user.uid] ?? 1) + 1
-            if let blogs = try? await fetch(uid: user.uid, page: next), !blogs.isEmpty {
-                pages[user.uid] = next
-                added.append(contentsOf: blogs)
-            }
-        }
-
-        let existing = Set(items.map { $0.navKey })
-        let newOnes = added.filter { !existing.contains($0.navKey) }
-        if newOnes.isEmpty {
-            emptyLoadCount += 1
-            if emptyLoadCount >= 2 { canLoadMore = false }
-        } else {
-            emptyLoadCount = 0
-            items = Self.sorted(items + newOnes)
-        }
-    }
-
-    private func fetch(uid: String, page: Int) async throws -> [MBlog] {
         guard let url = WeiboEndpoint.container(
-            id: WeiboEndpoint.userTimelineContainer(uid: uid),
-            page: page
-        ) else {
-            throw WeiboAPIError.badURL
-        }
-        let response: ContainerResponse = try await WeiboAPI.shared.get(url)
-        guard response.ok == 1, let data = response.data else {
-            throw WeiboAPIError.empty
-        }
-        return data.statusCards
-    }
+            id: id,
+            page: 1,
+            sinceID: cursor.isEmpty ? nil : cursor
+        ) else { return }
 
-    private static func sorted(_ blogs: [MBlog]) -> [MBlog] {
-        var seen = Set<String>()
-        var unique: [MBlog] = []
-        for blog in blogs where !seen.contains(blog.navKey) {
-            seen.insert(blog.navKey)
-            unique.append(blog)
-        }
-        return unique.sorted {
-            ($0.createdDate ?? .distantPast) > ($1.createdDate ?? .distantPast)
+        do {
+            let response: ContainerResponse = try await WeiboAPI.shared.get(url)
+            guard response.ok == 1, let data = response.data else { return }
+            if !data.cursor.isEmpty { cursor = data.cursor }
+
+            var added: [MBlog] = []
+            for blog in data.statusCards where !seen.contains(blog.navKey) {
+                seen.insert(blog.navKey)
+                added.append(blog)
+            }
+            if added.isEmpty {
+                emptyLoadCount += 1
+                if emptyLoadCount >= 2 { canLoadMore = false }
+            } else {
+                emptyLoadCount = 0
+                items.append(contentsOf: added)
+            }
+        } catch {
+            errorMessage = "加载更多失败，稍后再试。"
         }
     }
 }

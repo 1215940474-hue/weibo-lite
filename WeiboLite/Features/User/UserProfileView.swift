@@ -31,6 +31,7 @@ struct UserProfileView: View {
 
                     ForEach(store.items) { status in
                         StatusCardView(status: status)
+                            .equatable()
                     }
 
                     if store.isLoadingMore {
@@ -57,36 +58,12 @@ struct UserProfileView: View {
         .background(AppBackground())
         .navigationTitle(user?.screenName ?? "个人主页")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    toggleSpecial()
-                } label: {
-                    Image(systemName: isSpecial ? "star.fill" : "star")
-                        .foregroundStyle(isSpecial ? Color.yellow : Color.secondary)
-                }
-            }
-        }
         .task {
             await loadProfile()
             if store.items.isEmpty {
                 await store.reload()
             }
         }
-    }
-
-    private var isSpecial: Bool {
-        guard let uid = user?.uid, !uid.isEmpty else { return false }
-        return SpecialFollowStore.shared.isSpecial(uid)
-    }
-
-    private func toggleSpecial() {
-        guard let user = user, !user.uid.isEmpty else { return }
-        SpecialFollowStore.shared.toggle(
-            uid: user.uid,
-            name: user.screenName,
-            avatar: user.avatarURL
-        )
     }
 
     private var profileCard: some View {
