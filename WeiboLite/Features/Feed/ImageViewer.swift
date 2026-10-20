@@ -53,7 +53,7 @@ struct ImageViewer: View {
     var body: some View {
         ZStack(alignment: .top) {
             Color.black
-                .opacity(appeared ? (1 - dragProgress * 0.9) : 0)
+                .opacity(appeared ? Double(1 - dragProgress * 0.9) : 0)
                 .ignoresSafeArea()
 
             TabView(selection: $index) {
@@ -72,7 +72,7 @@ struct ImageViewer: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .offset(y: dragTranslation.height)
             .scaleEffect(1 - dragProgress * 0.22)
-            .opacity(appeared ? (1 - dragProgress * 0.55) : 0)
+            .opacity(appeared ? Double(1 - dragProgress * 0.55) : 0)
 
             counter
         }
