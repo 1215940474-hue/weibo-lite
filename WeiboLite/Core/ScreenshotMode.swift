@@ -30,6 +30,8 @@ enum ScreenshotFixtures {
         }
     }
 
+    static var followingUsers: [WBUser] { decode([WBUser].self, followingUsersJSON) ?? [] }
+
     static var user: WBUser? {
         decode(WBUser.self, userJSON)
     }
@@ -37,6 +39,16 @@ enum ScreenshotFixtures {
     private static func decode<T: Decodable>(_ type: T.Type, _ json: String) -> T? {
         try? JSONDecoder().decode(T.self, from: Data(json.utf8))
     }
+
+    private static let followingUsersJSON = """
+    [
+      {"id":"3000000001","screen_name":"摄影师老王","profile_image_url":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/006APoFYly8h8k0vb3z4bj30hs0hsdg2.jpg","verified":true,"description":"城市摄影 / 记录光与影"},
+      {"id":"3000000002","screen_name":"数据观察","profile_image_url":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/006APoFYly8h8k0vb3z4bj30hs0hsdg2.jpg","verified":true,"description":"用数据看世界"},
+      {"id":"3000000003","screen_name":"周末观察员","profile_image_url":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/006APoFYly8h8k0vb3z4bj30hs0hsdg2.jpg","description":"周末去哪里"},
+      {"id":"3000000004","screen_name":"深夜食堂","profile_image_url":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/006APoFYly8h8k0vb3z4bj30hs0hsdg2.jpg","description":"一碗面的事"},
+      {"id":"3000000005","screen_name":"旅行计划中","profile_image_url":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/006APoFYly8h8k0vb3z4bj30hs0hsdg2.jpg","description":"下一站去哪"}
+    ]
+    """
 
     private static let userJSON = """
     {"id":"1234567890","screen_name":"示例用户","profile_image_url":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/006APoFYly8h8k0vb3z4bj30hs0hsdg2.jpg","avatar_large":"https://tvax1.sinaimg.cn/crop.0.0.180.180.180/006APoFYly8h8k0vb3z4bj30hs0hsdg2.jpg","verified":true,"description":"iOS 开发者 / 摄影爱好者 / 记录生活"}

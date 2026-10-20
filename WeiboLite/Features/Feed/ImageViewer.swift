@@ -37,6 +37,7 @@ struct ImageViewer: View {
     @State private var index: Int
     @State private var appeared = false
     @State private var dragTranslation: CGSize = .zero
+    @State private var isZoomed = false
     @State private var toast: String?
 
     init(payload: ImageViewerPayload, onClose: @escaping () -> Void = {}) {
@@ -63,6 +64,9 @@ struct ImageViewer: View {
                         onDismiss: { dismissViewer(.tap) },
                         onSaveResult: { success in
                             showToast(success ? "已保存到相册" : "保存失败，请检查相册权限")
+                        },
+                        onZoomChanged: { zoomed in
+                            isZoomed = zoomed
                         }
                     )
                     .tag(item.offset)
@@ -110,7 +114,8 @@ struct ImageViewer: View {
     private var dragGesture: some Gesture {
         DragGesture(minimumDistance: 10)
             .onChanged { value in
-                guard abs(value.translation.height) > abs(value.translation.width) else { return }
+                guard !isZoomed,
+                      abs(value.translation.height) > abs(value.translation.width) else { return }
                 dragTranslation = CGSize(width: 0, height: max(0, value.translation.height))
             }
             .onEnded { value in
@@ -172,10 +177,13 @@ private struct ViewerPage: View {
     let url: URL
     let onDismiss: () -> Void
     let onSaveResult: (Bool) -> Void
+    var onZoomChanged: (Bool) -> Void = { _ in }
 
     @State private var image: UIImage?
     @State private var scale: CGFloat = 1
     @State private var lastScale: CGFloat = 1
+    @State private var panOffset: CGSize = .zero
+    @State private var lastPanOffset: CGSize = .zero
     @State private var showSaveDialog = false
 
     var body: some View {
@@ -191,11 +199,16 @@ private struct ViewerPage: View {
                         .scaledToFit()
                         .frame(width: proxy.size.width, height: proxy.size.height)
                         .scaleEffect(scale)
+                        .offset(panOffset)
                         .gesture(magnification)
+                        .simultaneousGesture(panGesture)
                         .onTapGesture(count: 2) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 scale = scale > 1 ? 1 : 2.5
                                 lastScale = scale
+                                panOffset = .zero
+                                lastPanOffset = .zero
+                                onZoomChanged(scale > 1)
                             }
                         }
                         .onTapGesture {
@@ -232,9 +245,30 @@ private struct ViewerPage: View {
         MagnificationGesture()
             .onChanged { value in
                 scale = min(max(lastScale * value, 1), 4)
+                onZoomChanged(scale > 1.01)
             }
             .onEnded { _ in
                 lastScale = scale
+                onZoomChanged(scale > 1.01)
+                if scale <= 1.01 {
+                    panOffset = .zero
+                    lastPanOffset = .zero
+                }
+            }
+    }
+
+    /// 放大之后允许拖动查看细节
+    private var panGesture: some Gesture {
+        DragGesture(minimumDistance: 5)
+            .onChanged { value in
+                guard scale > 1.01 else { return }
+                panOffset = CGSize(
+                    width: lastPanOffset.width + value.translation.width,
+                    height: lastPanOffset.height + value.translation.height
+                )
+            }
+            .onEnded { _ in
+                lastPanOffset = panOffset
             }
     }
 

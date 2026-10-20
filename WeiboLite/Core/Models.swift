@@ -20,6 +20,8 @@ struct ContainerData: Decodable {
     let sinceID: Int64
     let maxID: Int64
     let userInfo: WBUser?
+    /// 页面页签（关注/特别关注/关注列表/粉丝列表 的 containerid 就藏在这里）
+    let tabsInfo: TabsInfo?
     /// cardlistInfo.since_id：推荐翻页游标（原样字符串传回）
     let cursor: String
 
@@ -29,6 +31,7 @@ struct ContainerData: Decodable {
         case maxID = "max_id"
         case userInfo
         case cardlistInfo
+        case tabsInfo
     }
 
     private struct CardlistInfo: Decodable {
@@ -46,6 +49,7 @@ struct ContainerData: Decodable {
         sinceID = Int64(container.soft(FlexID.self, .sinceID)?.value ?? "") ?? 0
         maxID = Int64(container.soft(FlexID.self, .maxID)?.value ?? "") ?? 0
         userInfo = container.soft(WBUser.self, .userInfo)
+        tabsInfo = container.soft(TabsInfo.self, .tabsInfo)
         cursor = container.soft(CardlistInfo.self, .cardlistInfo)?.sinceID ?? ""
     }
 
@@ -91,6 +95,8 @@ struct Card: Decodable {
     let cardGroup: [Card]
     let desc: String
     let descExtr: String
+    /// 关注/粉丝列表里每个卡片带一个 user
+    let user: WBUser?
 
     private enum CodingKeys: String, CodingKey {
         case cardType = "card_type"
@@ -98,6 +104,7 @@ struct Card: Decodable {
         case cardGroup = "card_group"
         case desc
         case descExtr = "desc_extr"
+        case user
     }
 
     init(from decoder: Decoder) throws {
@@ -107,6 +114,7 @@ struct Card: Decodable {
         cardGroup = container.soft([Card].self, .cardGroup) ?? []
         desc = HTMLText.plain(container.soft(String.self, .desc) ?? "")
         descExtr = container.soft(String.self, .descExtr) ?? ""
+        user = container.soft(WBUser.self, .user)
     }
 
     var allBlogs: [MBlog] {
@@ -419,6 +427,37 @@ struct ProfileInfoData: Decodable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         userInfo = container.soft(WBUser.self, .userInfo)
             ?? container.soft(WBUser.self, .userInfoSnake)
+    }
+}
+
+// MARK: - 页面页签
+
+struct TabsInfo: Decodable {
+    let tabs: [FeedTab]
+
+    private enum CodingKeys: String, CodingKey { case tabs }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        tabs = container.soft([FeedTab].self, .tabs) ?? []
+    }
+}
+
+struct FeedTab: Decodable, Identifiable, Hashable {
+    let title: String
+    let containerID: String
+
+    var id: String { containerID }
+
+    private enum CodingKeys: String, CodingKey {
+        case title
+        case containerID = "containerid"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = HTMLText.plain(container.soft(String.self, .title) ?? "")
+        containerID = container.soft(String.self, .containerID) ?? ""
     }
 }
 

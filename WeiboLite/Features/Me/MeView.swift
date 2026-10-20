@@ -8,7 +8,13 @@ struct MeView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
-                    profileCard
+                    NavigationLink {
+                        MyFollowingView()
+                    } label: {
+                        profileCard
+                    }
+                    .buttonStyle(.plain)
+
                     actionCard
                     aboutCard
                 }
@@ -20,6 +26,12 @@ struct MeView: View {
             .background(AppBackground())
             .navigationTitle("我")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: UserRoute.self) { route in
+                UserProfileView(uid: route.uid)
+            }
+            .navigationDestination(for: String.self) { mid in
+                StatusDetailView(mid: mid)
+            }
             .task { await session.refreshProfile() }
             .refreshable { await session.refreshProfile() }
             .sheet(isPresented: $showLogin) {

@@ -21,6 +21,9 @@ final class FeedStore: ObservableObject {
     /// 当前已经成功加载到的页码（搜索/用户主页用）
     private var page = 1
     private var followingCursor = ""
+    private var followingContainerID: String?
+    private var followingContainerCursor = ""
+    private var followingContainerPage = 1
     private var recommendCursor = ""
     private var seen: Set<String> = []
     private var emptyLoadCount = 0
@@ -41,6 +44,8 @@ final class FeedStore: ObservableObject {
         errorMessage = nil
         page = 1
         followingCursor = ""
+        followingContainerCursor = ""
+        followingContainerPage = 1
         recommendCursor = ""
         emptyLoadCount = 0
         canLoadMore = true
@@ -94,7 +99,7 @@ final class FeedStore: ObservableObject {
         case .recommend:
             return try await fetchRecommend(isFirst: true)
         case .following:
-            return try await fetchFollowing(maxID: nil)
+            return try await fetchFollowingFeed(isFirst: true)
         case .user(let uid):
             return try await fetchContainer(
                 id: WeiboEndpoint.userTimelineContainer(uid: uid),
@@ -114,7 +119,7 @@ final class FeedStore: ObservableObject {
     private func fetchNext() async throws -> [MBlog] {
         switch source {
         case .following:
-            return try await fetchFollowing(maxID: followingCursor)
+            return try await fetchFollowingFeed(isFirst: false)
         case .recommend:
             return try await fetchRecommend(isFirst: false)
         case .user(let uid):
@@ -157,7 +162,35 @@ final class FeedStore: ObservableObject {
         return data.statusCards
     }
 
-    private func fetchFollowing(maxID: String?) async throws -> [MBlog] {
+    /// 关注：优先用微博「全部关注」分组（算法排序，不是严格时间线）
+    private func fetchFollowingFeed(isFirst: Bool) async throws -> [MBlog] {
+        guard WeiboSession.shared.isLoggedIn else {
+            throw WeiboAPIError.notLoggedIn
+        }
+        if followingContainerID == nil {
+            followingContainerID = await FeedTabsResolver.shared.homeTab(containing: "全部关注")
+                ?? await FeedTabsResolver.shared.homeTab(containing: "关注", excluding: ["特别关注"])
+        }
+
+        if let container = followingContainerID {
+            if !isFirst, followingContainerCursor.isEmpty { followingContainerPage += 1 }
+            if let url = WeiboEndpoint.container(
+                id: container,
+                page: followingContainerCursor.isEmpty ? (isFirst ? 1 : followingContainerPage) : 1,
+                sinceID: followingContainerCursor.isEmpty ? nil : followingContainerCursor
+            ), let response: ContainerResponse = try? await WeiboAPI.shared.get(url),
+               response.ok == 1, let data = response.data {
+                if !data.cursor.isEmpty { followingContainerCursor = data.cursor }
+                CrashTrace.log("following via container \(container) count=\(data.statusCards.count)")
+                return data.statusCards.filter { !$0.isAd }
+            }
+        }
+
+        // 兜底：时间线 /feed/friends
+        return try await fetchFollowingTimeline(maxID: isFirst ? nil : followingCursor)
+    }
+
+    private func fetchFollowingTimeline(maxID: String?) async throws -> [MBlog] {
         guard WeiboSession.shared.isLoggedIn else {
             throw WeiboAPIError.notLoggedIn
         }
