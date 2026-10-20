@@ -9,6 +9,11 @@ final class DetailStore: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     func load(mid: String) async {
+        if ScreenshotMode.isEnabled {
+            status = ScreenshotFixtures.feed.first
+            comments = ScreenshotFixtures.comments
+            return
+        }
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil

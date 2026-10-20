@@ -80,3 +80,36 @@ jobs:
           path: build/out/WeiboLite-unsigned.ipa
           if-no-files-found: error
           retention-days: 30
+
+      - name: Pick iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available | grep -E "iPhone (1[5-9]|2[0-9])" | head -n 1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "Using simulator: $UDID"
+          xcrun simctl boot "$UDID" || true
+
+      - name: Run UI screenshot tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project WeiboLite.xcodeproj \
+            -scheme WeiboLite \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -resultBundlePath build/WeiboLite.xcresult \
+            CODE_SIGNING_ALLOWED=NO || true
+
+      - name: Export screenshots
+        run: |
+          brew install xcparse || true
+          xcparse screenshots build/WeiboLite.xcresult build/screenshots || true
+          ls -R build/screenshots || true
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: build/screenshots
+          if-no-files-found: warn
+          retention-days: 14

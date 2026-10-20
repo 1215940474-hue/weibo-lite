@@ -9,6 +9,11 @@ final class HotSearchStore: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     func load() async {
+        if ScreenshotMode.isEnabled {
+            items = ScreenshotFixtures.hotItems
+            errorMessage = nil
+            return
+        }
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil

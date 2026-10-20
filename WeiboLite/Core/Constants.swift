@@ -6,7 +6,7 @@ extension Notification.Name {
 }
 
 enum AppInfo {
-    static let version = "0.9.2"
+    static let version = "0.9.3"
     static let disclaimer = """
     本 App 是非官方个人自用客户端，与微博官方无关。
     数据来自 m.weibo.cn 网页接口，属于未公开接口，

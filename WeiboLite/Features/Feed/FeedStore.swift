@@ -30,6 +30,12 @@ final class FeedStore: ObservableObject {
     }
 
     func reload() async {
+        if ScreenshotMode.isEnabled {
+            items = ScreenshotFixtures.feed
+            errorMessage = nil
+            canLoadMore = false
+            return
+        }
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil

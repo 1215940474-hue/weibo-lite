@@ -22,8 +22,8 @@ targets:
       path: Support/Info.plist
       properties:
         CFBundleDisplayName: 微博轻读
-        CFBundleShortVersionString: "0.9.2"
-        CFBundleVersion: "14"
+        CFBundleShortVersionString: "0.9.3"
+        CFBundleVersion: "15"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -42,12 +42,30 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
 
+  WeiboLiteUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: WeiboLiteUITests
+    dependencies:
+      - target: WeiboLite
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.weibolite.uitests
+        TEST_TARGET_NAME: WeiboLite
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   WeiboLite:
     build:
       targets:
         WeiboLite: all
+        WeiboLiteUITests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - WeiboLiteUITests
     archive:
       config: Release

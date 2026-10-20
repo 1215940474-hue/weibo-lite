@@ -109,6 +109,11 @@ struct UserProfileView: View {
     }
 
     private func loadProfile() async {
+        if ScreenshotMode.isEnabled {
+            user = ScreenshotFixtures.user
+            isLoadingProfile = false
+            return
+        }
         guard isLoadingProfile else { return }
         defer { isLoadingProfile = false }
         guard let url = WeiboEndpoint.userProfileContainer(uid: uid) else { return }

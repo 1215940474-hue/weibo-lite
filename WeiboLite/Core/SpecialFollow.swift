@@ -20,6 +20,11 @@ final class SpecialFeedStore: ObservableObject {
     private var emptyLoadCount = 0
 
     func reload() async {
+        if ScreenshotMode.isEnabled {
+            items = ScreenshotFixtures.special
+            errorMessage = nil
+            return
+        }
         guard !isLoading else { return }
         isLoading = true
         errorMessage = nil

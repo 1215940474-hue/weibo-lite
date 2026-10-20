@@ -30,7 +30,7 @@ struct RootView: View {
                     if session.isLoggedIn {
                         await session.refreshProfile()
                     }
-                    guard !session.isLoggedIn, !didSkipLogin else { return }
+                    guard !session.isLoggedIn, !didSkipLogin, !ScreenshotMode.isEnabled else { return }
                     cover = .login
                 }
                 .onChange(of: session.isLoggedIn) { _, newValue in
