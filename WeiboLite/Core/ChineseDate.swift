@@ -46,7 +46,7 @@ enum ChineseDate {
     }
 
     private static func firstNumber(in text: String) -> Int? {
-        guard let regex = try? NSRegularExpression(pattern: "(\d+)", options: []) else { return nil }
+        guard let regex = try? NSRegularExpression(pattern: "(\\d+)", options: []) else { return nil }
         let ns = text as NSString
         guard let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: ns.length)),
               match.numberOfRanges > 1 else { return nil }
@@ -54,7 +54,7 @@ enum ChineseDate {
     }
 
     private static func firstTime(in text: String) -> (Int, Int)? {
-        guard let regex = try? NSRegularExpression(pattern: "(\d{1,2}):(\d{2})", options: []) else { return nil }
+        guard let regex = try? NSRegularExpression(pattern: "(\\d{1,2}):(\\d{2})", options: []) else { return nil }
         let ns = text as NSString
         guard let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: ns.length)),
               match.numberOfRanges > 2 else { return nil }
