@@ -108,18 +108,20 @@ jobs:
           base = "build/screenshots"
           manifest = os.path.join(base, "manifest.json")
           if not os.path.exists(manifest):
-              print("no manifest")
               raise SystemExit(0)
           with open(manifest) as f:
               data = json.load(f)
-          for test in data.get("attachments", data if isinstance(data, list) else []):
-              for att in test.get("attachments", []) if isinstance(test, dict) else []:
+          groups = data if isinstance(data, list) else data.get("attachments", [])
+          for group in groups:
+              if not isinstance(group, dict):
+                  continue
+              for att in group.get("attachments", []):
                   src = os.path.join(base, att.get("exportedFileName", ""))
-                  name = att.get("suggestedHumanReadableName", "").strip() or "shot"
+                  raw = att.get("suggestedHumanReadableName") or "shot.png"
+                  name = raw.split("_0_")[0].strip() or "shot"
                   if os.path.exists(src):
-                      dst = os.path.join(base, name + ".png")
-                      shutil.move(src, dst)
-                      print("exported", dst)
+                      shutil.move(src, os.path.join(base, name + ".png"))
+                      print("exported", name + ".png")
           PY
           ls -la build/screenshots || true
 
