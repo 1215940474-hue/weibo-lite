@@ -200,8 +200,10 @@ final class MBlog: Decodable, Identifiable {
 
 // MARK: - 用户
 
-struct WBUser: Decodable, Hashable {
+struct WBUser: Decodable, Hashable, Identifiable {
     let uid: String
+
+    var id: String { uid }
     let screenName: String
     let avatarURL: URL?
     let verified: Bool

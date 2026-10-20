@@ -168,8 +168,14 @@ final class FeedStore: ObservableObject {
             throw WeiboAPIError.notLoggedIn
         }
         if followingContainerID == nil {
-            followingContainerID = await FeedTabsResolver.shared.homeTab(containing: "全部关注")
-                ?? await FeedTabsResolver.shared.homeTab(containing: "关注", excluding: ["特别关注"])
+            if let allFollow = await FeedTabsResolver.shared.homeTab(containing: "全部关注") {
+                followingContainerID = allFollow
+            } else if let fallback = await FeedTabsResolver.shared.homeTab(
+                containing: "关注",
+                excluding: ["特别关注"]
+            ) {
+                followingContainerID = fallback
+            }
         }
 
         if let container = followingContainerID {
