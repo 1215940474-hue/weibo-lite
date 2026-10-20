@@ -4,7 +4,6 @@ import WebKit
 /// 兜底方案：直接打开 m.weibo.cn 网页，并注入脚本隐藏带「推广 / 广告」字样的卡片。
 /// 原生接口失效时，至少还能刷网页版。
 struct WebModeView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var isLoading = true
 
     var body: some View {
@@ -18,10 +17,8 @@ struct WebModeView: View {
                     .glassCapsule()
             }
         }
-        .toolbar(.hidden, for: .navigationBar)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            GlassPageHeader(title: "网页模式", showsBack: true, onBack: { dismiss() })
-        }
+        .navigationTitle("网页模式")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -14,14 +14,12 @@ struct MeView: View {
                 }
                 .padding(.horizontal, Theme.pagePadding)
                 .padding(.top, 10)
-                .padding(.bottom, 40)
+                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
             .background(AppBackground())
-            .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                GlassPageHeader(title: "我")
-            }
+            .navigationTitle("我")
+            .navigationBarTitleDisplayMode(.inline)
             .task { await session.refreshProfile() }
             .refreshable { await session.refreshProfile() }
             .sheet(isPresented: $showLogin) {

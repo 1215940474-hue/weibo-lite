@@ -19,7 +19,17 @@ struct FeedView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
+            VStack(spacing: 0) {
+                Picker("分组", selection: $tab) {
+                    ForEach(HomeTab.allCases, id: \.self) { item in
+                        Text(item.rawValue).tag(item)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, Theme.pagePadding)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
+
                 switch tab {
                 case .recommend:
                     FeedList(store: recommendStore)
@@ -29,20 +39,18 @@ struct FeedView: View {
                     SpecialFeedView()
                 }
             }
-            // 顶部：分段控件 + 渐进模糊，取代原来的大标题
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Picker("分组", selection: $tab) {
-                    ForEach(HomeTab.allCases, id: \.self) { item in
-                        Text(item.rawValue).tag(item)
+            .background(AppBackground())
+            .navigationTitle("微博轻读")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        refreshCurrentTab()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
                     }
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, Theme.pagePadding)
-                .padding(.top, 8)
-                .padding(.bottom, 8)
-                .background(ProgressiveTopBlur(height: 92))
             }
-            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
@@ -58,7 +66,6 @@ struct FeedView: View {
         }
     }
 
-    /// 再次点击「首页」标签时刷新当前分组
     private func refreshCurrentTab() {
         switch tab {
         case .recommend:
@@ -93,8 +100,8 @@ struct FeedList: View {
                 }
             }
             .padding(.horizontal, Theme.pagePadding)
-            .padding(.top, 6)
-            .padding(.bottom, 110)
+            .padding(.top, 4)
+            .padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)
         .refreshable { await store.reload() }

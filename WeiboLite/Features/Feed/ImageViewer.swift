@@ -60,7 +60,7 @@ struct ImageViewer: View {
                 ForEach(Array(payload.urls.enumerated()), id: \.offset) { item in
                     ViewerPage(
                         url: item.element,
-                        onDismiss: dismissViewer,
+                        onDismiss: { dismissViewer(.tap) },
                         onSaveResult: { success in
                             showToast(success ? "已保存到相册" : "保存失败，请检查相册权限")
                         }
@@ -117,7 +117,7 @@ struct ImageViewer: View {
                 let farEnough = value.translation.height > 160
                 let fastEnough = value.predictedEndTranslation.height > 420
                 if farEnough || fastEnough {
-                    dismissViewer()
+                    dismissViewer(.drag)
                 } else {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                         dragTranslation = .zero
@@ -126,14 +126,35 @@ struct ImageViewer: View {
             }
     }
 
-    private func dismissViewer() {
-        withAnimation(.easeOut(duration: 0.22)) {
-            appeared = false
-            dragTranslation = CGSize(width: 0, height: 400)
-        }
-        Task {
-            try? await Task.sleep(nanoseconds: 220_000_000)
-            onClose()
+    private enum DismissStyle {
+        /// 单击：原地淡出（不位移）
+        case tap
+        /// 下滑：顺着手指方向飞出去
+        case drag
+    }
+
+    private func dismissViewer(_ style: DismissStyle) {
+        switch style {
+        case .tap:
+            withAnimation(.easeInOut(duration: 0.24)) {
+                appeared = false
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: 240_000_000)
+                onClose()
+            }
+        case .drag:
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+                dragTranslation = CGSize(
+                    width: dragTranslation.width,
+                    height: dragTranslation.height + 260
+                )
+                appeared = false
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: 280_000_000)
+                onClose()
+            }
         }
     }
 
@@ -160,6 +181,10 @@ private struct ViewerPage: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack {
+                Color.black.opacity(0.001)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onDismiss() }
+
                 if let image = image {
                     Image(uiImage: image)
                         .resizable()

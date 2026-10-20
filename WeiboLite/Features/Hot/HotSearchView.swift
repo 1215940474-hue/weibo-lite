@@ -74,9 +74,11 @@ struct HotSearchView: View {
             }
             .padding(.horizontal, Theme.pagePadding)
             .padding(.top, 4)
-            .padding(.bottom, 110)
+            .padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)
+        .navigationTitle("热搜")
+        .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.load() }
         .task {
             if store.items.isEmpty { await store.load() }

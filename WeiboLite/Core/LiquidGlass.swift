@@ -15,30 +15,15 @@ struct AppBackground: View {
 }
 
 extension View {
-    /// 卡片 / 胶囊的玻璃外观。
-    ///
-    /// - Xcode 26（Swift 6.2+，含 iOS 26 SDK）：用原生 Liquid Glass `glassEffect`
-    /// - 老 Xcode（如 macos-14 镜像的 Xcode 16）：自动走毛玻璃，保证工程照样能编译
+    /// 卡片外观（v0.1 同款）：系统毛玻璃材质 + 细描边 + 轻投影。
+    /// 系统导航栏 / Tab 栏 / 按钮本身由 iOS 26 自动采用原生 Liquid Glass，
+    /// 这里不再手写玻璃，避免"越画越生硬"。
     @ViewBuilder
     func glassSurface<S: InsettableShape>(_ shape: S) -> some View {
-        #if compiler(>=6.2)
-        if #available(iOS 26.0, *) {
-            self
-                .glassEffect(.regular, in: shape)
-                .shadow(color: Color.black.opacity(0.06), radius: 10, x: 0, y: 4)
-        } else {
-            fallbackGlass(shape)
-        }
-        #else
-        fallbackGlass(shape)
-        #endif
-    }
-
-    @ViewBuilder
-    private func fallbackGlass<S: InsettableShape>(_ shape: S) -> some View {
         self
             .background(.ultraThinMaterial, in: shape)
             .overlay(shape.strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.8))
+            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 3)
     }
 
     @ViewBuilder

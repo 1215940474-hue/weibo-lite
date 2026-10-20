@@ -29,10 +29,8 @@ struct SearchView: View {
                 }
             }
             .background(AppBackground())
-            .toolbar(.hidden, for: .navigationBar)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                GlassPageHeader(title: "搜索")
-            }
+            .navigationTitle("搜索")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
@@ -80,7 +78,6 @@ struct SearchView: View {
 /// 搜索结果页（热搜点击 / 搜索跳转用）：自定义顶栏，避免系统导航栏下面的那条横线。
 struct SearchResultView: View {
     let keyword: String
-    @Environment(\.dismiss) private var dismiss
 
     @StateObject private var store: FeedStore
 
@@ -90,12 +87,9 @@ struct SearchResultView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            GlassPageHeader(title: keyword, showsBack: true, onBack: { dismiss() })
-
-            FeedList(store: store)
-        }
-        .background(AppBackground())
-        .toolbar(.hidden, for: .navigationBar)
+        FeedList(store: store)
+            .background(AppBackground())
+        .navigationTitle(keyword)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

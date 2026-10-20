@@ -19,10 +19,7 @@ struct UserProfileView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-
-            ScrollView {
+        ScrollView {
                 LazyVStack(spacing: 10) {
                     profileCard
 
@@ -57,33 +54,24 @@ struct UserProfileView: View {
                 guard isNearBottom else { return }
                 Task { await store.loadMore() }
             }
-        }
         .background(AppBackground())
-        .toolbar(.hidden, for: .navigationBar)
+        .navigationTitle(user?.screenName ?? "个人主页")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    toggleSpecial()
+                } label: {
+                    Image(systemName: isSpecial ? "star.fill" : "star")
+                        .foregroundStyle(isSpecial ? Color.yellow : Color.secondary)
+                }
+            }
+        }
         .task {
             await loadProfile()
             if store.items.isEmpty {
                 await store.reload()
             }
-        }
-    }
-
-    private var topBar: some View {
-        GlassPageHeader(
-            title: user?.screenName ?? "个人主页",
-            showsBack: true,
-            onBack: { dismiss() }
-        ) {
-            Button {
-                toggleSpecial()
-            } label: {
-                Image(systemName: isSpecial ? "star.fill" : "star")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(isSpecial ? Color.yellow : Color.secondary)
-                    .frame(width: 34, height: 34)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
     }
 

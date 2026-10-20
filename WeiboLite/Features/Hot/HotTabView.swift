@@ -6,10 +6,6 @@ struct HotTabView: View {
     var body: some View {
         NavigationStack {
             HotSearchView()
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    GlassPageHeader(title: "热搜")
-                }
-                .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: SearchRoute.self) { route in
                     SearchResultView(keyword: route.keyword)
                 }
