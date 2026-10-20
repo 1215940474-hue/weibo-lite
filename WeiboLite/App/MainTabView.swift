@@ -8,6 +8,7 @@ extension Notification.Name {
 struct MainTabView: View {
     enum Tab: String, CaseIterable, Identifiable {
         case home = "首页"
+        case hot = "热搜"
         case search = "搜索"
         case me = "我"
 
@@ -16,6 +17,7 @@ struct MainTabView: View {
         var icon: String {
             switch self {
             case .home: return "house.fill"
+            case .hot: return "flame.fill"
             case .search: return "magnifyingglass"
             case .me: return "person.crop.circle.fill"
             }
@@ -25,11 +27,13 @@ struct MainTabView: View {
     @State private var selection: Tab = .home
 
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             Group {
                 switch selection {
                 case .home:
                     FeedView()
+                case .hot:
+                    HotTabView()
                 case .search:
                     SearchView()
                 case .me:
@@ -43,12 +47,12 @@ struct MainTabView: View {
         .background(AppBackground())
     }
 
+    /// 悬浮玻璃导航栏：内容从下面滚过，玻璃才有折射感
     private var tabBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 2) {
             ForEach(Tab.allCases) { tab in
                 Button {
                     if selection == tab {
-                        // 重复点击首页 = 刷新信息流
                         if tab == .home {
                             NotificationCenter.default.post(name: .homeRefreshRequested, object: nil)
                         }
@@ -58,22 +62,22 @@ struct MainTabView: View {
                 } label: {
                     VStack(spacing: 3) {
                         Image(systemName: tab.icon)
-                            .font(.system(size: 18, weight: .semibold))
+                            .font(.system(size: 17, weight: .semibold))
                         Text(tab.rawValue)
-                            .font(.caption2)
+                            .font(.system(size: 10, weight: .medium))
                     }
                     .foregroundStyle(selection == tab ? Color.accentColor : Color.secondary)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 7)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .glassSurface(Capsule(style: .continuous))
-        .padding(.horizontal, 44)
-        .padding(.top, 4)
+        .padding(.horizontal, 26)
         .padding(.bottom, 4)
     }
 }

@@ -29,8 +29,10 @@ struct SearchView: View {
                 }
             }
             .background(AppBackground())
-            .navigationTitle("搜索")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                GlassPageHeader(title: "搜索")
+            }
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
@@ -89,29 +91,9 @@ struct SearchResultView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                        .frame(width: 34, height: 34)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+            GlassPageHeader(title: keyword, showsBack: true, onBack: { dismiss() })
 
-                Text(keyword)
-                    .font(.headline)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(Color(uiColor: .systemBackground))
-
-            FeedList(store: store, showsTopFade: false)
+            FeedList(store: store)
         }
         .background(AppBackground())
         .toolbar(.hidden, for: .navigationBar)

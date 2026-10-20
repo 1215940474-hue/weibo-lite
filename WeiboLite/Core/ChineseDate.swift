@@ -26,6 +26,52 @@ enum ChineseDate {
 
     private static let relativeWords = ["刚刚", "分钟前", "小时前", "今天", "昨天", "前天"]
 
+    /// 给需要排序的场景用：解析成 Date（相对时间会按当前时间估算）
+    static func date(_ raw: String) -> Date? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        if text.contains("刚刚") { return Date() }
+
+        if let number = firstNumber(in: text) {
+            if text.contains("分钟前") { return Date().addingTimeInterval(-Double(number) * 60) }
+            if text.contains("小时前") { return Date().addingTimeInterval(-Double(number) * 3600) }
+        }
+        if text.contains("今天") {
+            if let hm = firstTime(in: text) { return dateAt(hour: hm.0, minute: hm.1, dayOffset: 0) }
+        }
+        if text.contains("昨天") {
+            if let hm = firstTime(in: text) { return dateAt(hour: hm.0, minute: hm.1, dayOffset: -1) }
+        }
+        return parse(text)
+    }
+
+    private static func firstNumber(in text: String) -> Int? {
+        guard let regex = try? NSRegularExpression(pattern: "(\d+)", options: []) else { return nil }
+        let ns = text as NSString
+        guard let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges > 1 else { return nil }
+        return Int(ns.substring(with: match.range(at: 1)))
+    }
+
+    private static func firstTime(in text: String) -> (Int, Int)? {
+        guard let regex = try? NSRegularExpression(pattern: "(\d{1,2}):(\d{2})", options: []) else { return nil }
+        let ns = text as NSString
+        guard let match = regex.firstMatch(in: text, options: [], range: NSRange(location: 0, length: ns.length)),
+              match.numberOfRanges > 2 else { return nil }
+        let hour = Int(ns.substring(with: match.range(at: 1))) ?? 0
+        let minute = Int(ns.substring(with: match.range(at: 2))) ?? 0
+        return (hour, minute)
+    }
+
+    private static func dateAt(hour: Int, minute: Int, dayOffset: Int) -> Date? {
+        let calendar = Calendar.current
+        guard let day = calendar.date(byAdding: .day, value: dayOffset, to: Date()) else { return nil }
+        var components = calendar.dateComponents([.year, .month, .day], from: day)
+        components.hour = hour
+        components.minute = minute
+        return calendar.date(from: components)
+    }
+
     static func display(_ raw: String) -> String {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return "" }

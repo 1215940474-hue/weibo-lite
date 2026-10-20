@@ -41,7 +41,7 @@ struct UserProfileView: View {
                     }
                 }
                 .padding(.horizontal, Theme.pagePadding)
-                .padding(.bottom, 40)
+                .padding(.bottom, 110)
             }
             .scrollIndicators(.hidden)
             .refreshable {
@@ -69,27 +69,36 @@ struct UserProfileView: View {
     }
 
     private var topBar: some View {
-        HStack(spacing: 8) {
+        GlassPageHeader(
+            title: user?.screenName ?? "个人主页",
+            showsBack: true,
+            onBack: { dismiss() }
+        ) {
             Button {
-                dismiss()
+                toggleSpecial()
             } label: {
-                Image(systemName: "chevron.left")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                Image(systemName: isSpecial ? "star.fill" : "star")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(isSpecial ? Color.yellow : Color.secondary)
                     .frame(width: 34, height: 34)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-
-            Text(user?.screenName ?? "个人主页")
-                .font(.headline)
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(Color(uiColor: .systemBackground))
+    }
+
+    private var isSpecial: Bool {
+        guard let uid = user?.uid, !uid.isEmpty else { return false }
+        return SpecialFollowStore.shared.isSpecial(uid)
+    }
+
+    private func toggleSpecial() {
+        guard let user = user, !user.uid.isEmpty else { return }
+        SpecialFollowStore.shared.toggle(
+            uid: user.uid,
+            name: user.screenName,
+            avatar: user.avatarURL
+        )
     }
 
     private var profileCard: some View {

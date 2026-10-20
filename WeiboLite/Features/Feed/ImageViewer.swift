@@ -2,7 +2,7 @@ import Photos
 import SwiftUI
 import UIKit
 
-/// 图片查看器入参（用于 fullScreenCover(item:)）
+/// 图片查看器入参
 struct ImageViewerPayload: Identifiable {
     let id = UUID()
     let urls: [URL]
@@ -26,14 +26,18 @@ enum WeiboImage {
     }
 }
 
-/// 全屏看图：淡入缩放出现（不上下跳）、左右翻页、单击退出、双击/双指缩放、长按弹保存确认。
+/// 全屏看图：
+/// - 出现：缩放 + 淡入（spring，不生硬）
+/// - 按住下滑：图片跟手缩小、渐隐，背景同步透明，松手过阈值关闭
+/// - 单击关闭、双击缩放、双指缩放、长按保存（确认框）
 struct ImageViewer: View {
     let payload: ImageViewerPayload
     var onClose: () -> Void = {}
+
     @State private var index: Int
     @State private var appeared = false
+    @State private var dragTranslation: CGSize = .zero
     @State private var toast: String?
-    @State private var dragOffset: CGFloat = 0
 
     init(payload: ImageViewerPayload, onClose: @escaping () -> Void = {}) {
         self.payload = payload
@@ -41,16 +45,22 @@ struct ImageViewer: View {
         _index = State(initialValue: payload.startIndex)
     }
 
+    /// 0...1 拖拽进度：控制缩放/透明度/背景
+    private var dragProgress: CGFloat {
+        min(max(dragTranslation.height / 420, 0), 1)
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             Color.black
+                .opacity(appeared ? (1 - dragProgress * 0.9) : 0)
                 .ignoresSafeArea()
 
             TabView(selection: $index) {
                 ForEach(Array(payload.urls.enumerated()), id: \.offset) { item in
                     ViewerPage(
                         url: item.element,
-                        onDismiss: onClose,
+                        onDismiss: dismissViewer,
                         onSaveResult: { success in
                             showToast(success ? "已保存到相册" : "保存失败，请检查相册权限")
                         }
@@ -60,15 +70,19 @@ struct ImageViewer: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .offset(y: dragTranslation.height)
+            .scaleEffect(1 - dragProgress * 0.22)
+            .opacity(appeared ? (1 - dragProgress * 0.55) : 0)
 
-            topBar
+            counter
         }
-        .scaleEffect(appeared ? 1 : 0.96)
-        .offset(y: dragOffset)
-        .opacity(appeared ? (1 - min(dragOffset / 700, 0.45)) : 0)
-        .gesture(dismissGesture)
+        .scaleEffect(appeared ? 1 : 0.9)
+        .opacity(appeared ? 1 : 0)
+        .simultaneousGesture(dragGesture)
         .onAppear {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { appeared = true }
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.9)) {
+                appeared = true
+            }
         }
         .overlay(alignment: .bottom) {
             if let toast = toast {
@@ -77,49 +91,50 @@ struct ImageViewer: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.65), in: Capsule())
-                    .padding(.bottom, 50)
+                    .background(Color.black.opacity(0.6), in: Capsule())
+                    .padding(.bottom, 80)
             }
         }
     }
 
-    private var dismissGesture: some Gesture {
-        DragGesture(minimumDistance: 15)
+    private var counter: some View {
+        Text(payload.urls.count > 1 ? "\(index + 1)/\(payload.urls.count)" : "1/1")
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(.white.opacity(0.9))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Color.black.opacity(0.35), in: Capsule())
+            .padding(.top, 10)
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
             .onChanged { value in
                 guard abs(value.translation.height) > abs(value.translation.width) else { return }
-                dragOffset = max(0, value.translation.height)
+                dragTranslation = CGSize(width: 0, height: max(0, value.translation.height))
             }
             .onEnded { value in
-                if value.translation.height > 120 {
-                    onClose()
+                let farEnough = value.translation.height > 160
+                let fastEnough = value.predictedEndTranslation.height > 420
+                if farEnough || fastEnough {
+                    dismissViewer()
                 } else {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                        dragOffset = 0
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                        dragTranslation = .zero
                     }
                 }
             }
     }
 
-    private var topBar: some View {
-        HStack {
-            Text(payload.urls.count > 1 ? "\(index + 1)/\(payload.urls.count)" : "1/1")
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.85))
-
-            Spacer()
-
-            Button {
-                onClose()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .padding(10)
-                    .background(Color.white.opacity(0.18), in: Circle())
-            }
+    private func dismissViewer() {
+        withAnimation(.easeOut(duration: 0.22)) {
+            appeared = false
+            dragTranslation = CGSize(width: 0, height: 400)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
+        Task {
+            try? await Task.sleep(nanoseconds: 220_000_000)
+            onClose()
+        }
     }
 
     private func showToast(_ text: String) {
@@ -131,7 +146,7 @@ struct ImageViewer: View {
     }
 }
 
-/// 单页大图：加载原图、双指缩放、双击放大、单击退出、长按弹保存/取消。
+/// 单页大图
 private struct ViewerPage: View {
     let url: URL
     let onDismiss: () -> Void
@@ -153,7 +168,7 @@ private struct ViewerPage: View {
                         .scaleEffect(scale)
                         .gesture(magnification)
                         .onTapGesture(count: 2) {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 scale = scale > 1 ? 1 : 2.5
                                 lastScale = scale
                             }
@@ -214,7 +229,7 @@ private struct ViewerPage: View {
     }
 }
 
-/// 自带大图查看能力的图片九宫格（由根视图统一呈现查看器）。
+/// 自带大图查看能力的图片九宫格
 struct TappableImageGrid: View {
     let pics: [WBPic]
     @Environment(\.mediaPresenter) private var media: MediaPresenter

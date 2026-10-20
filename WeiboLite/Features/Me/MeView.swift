@@ -17,10 +17,11 @@ struct MeView: View {
                 .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
-            .overlay(alignment: .top) { TopBlurFade() }
             .background(AppBackground())
-            .navigationTitle("我")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                GlassPageHeader(title: "我")
+            }
             .task { await session.refreshProfile() }
             .refreshable { await session.refreshProfile() }
             .sheet(isPresented: $showLogin) {

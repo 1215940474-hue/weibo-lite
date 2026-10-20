@@ -41,8 +41,6 @@ struct HotSearchView: View {
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 8) {
-                header
-
                 if store.isLoading, store.items.isEmpty {
                     ProgressView().padding(.top, 30)
                 }
@@ -76,27 +74,15 @@ struct HotSearchView: View {
             }
             .padding(.horizontal, Theme.pagePadding)
             .padding(.top, 4)
-            .padding(.bottom, 100)
+            .padding(.bottom, 110)
         }
         .scrollIndicators(.hidden)
-        .overlay(alignment: .top) { TopBlurFade() }
         .refreshable { await store.load() }
         .task {
             if store.items.isEmpty { await store.load() }
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "flame.fill")
-                .foregroundStyle(.orange)
-            Text("微博热搜")
-                .font(.subheadline.weight(.semibold))
-            Spacer()
-        }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
-    }
 }
 
 private struct HotRow: View {

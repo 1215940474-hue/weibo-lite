@@ -10,7 +10,7 @@ struct FeedView: View {
     enum HomeTab: String, CaseIterable {
         case recommend = "推荐"
         case following = "关注"
-        case hot = "热搜"
+        case special = "特别关注"
     }
 
     @StateObject private var recommendStore = FeedStore(source: .recommend)
@@ -19,7 +19,18 @@ struct FeedView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            Group {
+                switch tab {
+                case .recommend:
+                    FeedList(store: recommendStore)
+                case .following:
+                    FeedList(store: followingStore)
+                case .special:
+                    SpecialFeedView()
+                }
+            }
+            // 顶部：分段控件 + 渐进模糊，取代原来的大标题
+            .safeAreaInset(edge: .top, spacing: 0) {
                 Picker("分组", selection: $tab) {
                     ForEach(HomeTab.allCases, id: \.self) { item in
                         Text(item.rawValue).tag(item)
@@ -27,21 +38,11 @@ struct FeedView: View {
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal, Theme.pagePadding)
-                .padding(.top, 4)
-                .padding(.bottom, 6)
-
-                switch tab {
-                case .recommend:
-                    FeedList(store: recommendStore)
-                case .following:
-                    FeedList(store: followingStore)
-                case .hot:
-                    HotSearchView()
-                }
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(ProgressiveTopBlur(height: 92))
             }
-            .background(AppBackground())
-            .navigationTitle("微博轻读")
-            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { mid in
                 StatusDetailView(mid: mid)
             }
@@ -64,16 +65,15 @@ struct FeedView: View {
             Task { await recommendStore.reload() }
         case .following:
             Task { await followingStore.reload() }
-        case .hot:
-            break
+        case .special:
+            NotificationCenter.default.post(name: .specialFeedRefreshRequested, object: nil)
         }
     }
 }
 
-/// 信息流列表（推荐 / 关注 / 搜索结果 / 用户主页共用）。
+/// 信息流列表（推荐 / 关注 / 搜索结果 / 用户主页共用）
 struct FeedList: View {
     @ObservedObject var store: FeedStore
-    var showsTopFade: Bool = true
 
     var body: some View {
         ScrollView {
@@ -94,7 +94,7 @@ struct FeedList: View {
             }
             .padding(.horizontal, Theme.pagePadding)
             .padding(.top, 6)
-            .padding(.bottom, 100)
+            .padding(.bottom, 110)
         }
         .scrollIndicators(.hidden)
         .refreshable { await store.reload() }
@@ -110,11 +110,6 @@ struct FeedList: View {
         .overlay {
             if store.isLoading, store.items.isEmpty {
                 ProgressView()
-            }
-        }
-        .overlay(alignment: .top) {
-            if showsTopFade {
-                TopBlurFade()
             }
         }
         .task {

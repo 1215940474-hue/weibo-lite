@@ -138,6 +138,8 @@ final class MBlog: Decodable, Identifiable {
     /// 解析一次就缓存，滚动时不再重复做正则/日期计算（性能关键）
     let plainText: String
     let displayTime: String
+    /// 供排序使用（特别关注流按时间合并）
+    let createdDate: Date?
 
     var id: String { statusID.isEmpty ? mid : statusID }
     /// 用于导航/请求详情的 id（m.weibo.cn 用 mid）
@@ -169,6 +171,7 @@ final class MBlog: Decodable, Identifiable {
         createdAt = container.soft(String.self, .createdAt) ?? ""
         plainText = HTMLText.plain(rawText)
         displayTime = ChineseDate.display(createdAt)
+        createdDate = ChineseDate.date(createdAt)
         source = HTMLText.plain(container.soft(String.self, .source) ?? "")
         user = container.soft(WBUser.self, .user)
         pics = container.soft([WBPic].self, .pics) ?? []

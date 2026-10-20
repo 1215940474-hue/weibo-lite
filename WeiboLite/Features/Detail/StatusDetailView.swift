@@ -3,6 +3,7 @@ import SwiftUI
 struct StatusDetailView: View {
     let mid: String
 
+    @Environment(\.dismiss) private var dismiss
     @StateObject private var store = DetailStore()
     @State private var fullTextHTML: String?
     @State private var isExpanded = false
@@ -44,8 +45,11 @@ struct StatusDetailView: View {
         }
         .scrollIndicators(.hidden)
         .background(AppBackground())
-        .navigationTitle("微博正文")
-        .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await store.load(mid: mid) }
+        .toolbar(.hidden, for: .navigationBar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            GlassPageHeader(title: "微博正文", showsBack: true, onBack: { dismiss() })
+        }
         .task { await store.load(mid: mid) }
     }
 
